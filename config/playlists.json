@@ -1,0 +1,28 @@
+[
+  {
+    "name": "NetFlow NOC Rotation",
+    "interval": "45s",
+    "items": [
+      {
+        "type": "dashboard_by_uid",
+        "value": "netflow-overview"
+      },
+      {
+        "type": "dashboard_by_uid",
+        "value": "netflow-top-talkers"
+      },
+      {
+        "type": "dashboard_by_uid",
+        "value": "netflow-asn"
+      },
+      {
+        "type": "dashboard_by_uid",
+        "value": "netflow-exporters"
+      },
+      {
+        "type": "dashboard_by_uid",
+        "value": "netflow-health"
+      }
+    ]
+  }
+]

@@ -1,0 +1,4 @@
+# Plugins the dashboards/datasources need. "id version" as shown by /api/plugins on grafana-01 (2026-10-10).
+# Install with: grafana cli plugins install <id> <version>   (scripts/install-lxc.sh does this)
+alexanderzobnin-zabbix-app          6.8.0   # also provides alexanderzobnin-zabbix-datasource and alexanderzobnin-zabbix-triggers-panel
+grafana-clickhouse-datasource       4.22.0

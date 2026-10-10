@@ -1,0 +1,22 @@
+# OPTIONAL file provisioning of the dashboards (alternative to scripts/apply.mjs).
+# On a CLEAN Grafana only. The running grafana-01 holds API-created dashboards with the same uids; pointing a file provider at them
+# makes Grafana take them over (or log conflicts) - use scripts/apply.mjs there. See docs/provisioning-mode.md.
+# Copy dashboards/netflow/*.json -> /var/lib/grafana/dashboards/netflow/ and dashboards/noc/*.json -> /var/lib/grafana/dashboards/noc/.
+apiVersion: 1
+providers:
+  - name: netflow
+    folder: NetFlow
+    folderUid: netflow
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    updateIntervalSeconds: 60
+    options: { path: /var/lib/grafana/dashboards/netflow }
+  - name: noc
+    folder: NOC
+    folderUid: noc
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    updateIntervalSeconds: 60
+    options: { path: /var/lib/grafana/dashboards/noc }

@@ -1,0 +1,39 @@
+# OPTIONAL file provisioning of the two datasources (alternative to scripts/apply.mjs; do not mix both on one instance).
+# Mirrors config/datasources.json. Secrets are NOT in this file: Grafana expands $VARS from the environment of grafana-server
+# (Debian: /etc/default/grafana-server, mode 0640 root:grafana). Required there:
+#   ZABBIX_GRAFANA_PASSWORD=...     (Zabbix account "grafana-ro", API read-only)
+#   CLICKHOUSE_RO_PASSWORD=...      (ClickHouse account "grafana_ro" on netflow-01, /opt/netflow/secrets/grafana-ro-password)
+apiVersion: 1
+datasources:
+  - name: Zabbix LAB
+    uid: zabbix-lab
+    type: alexanderzobnin-zabbix-datasource
+    access: proxy
+    url: https://192.168.1.91:8443/api_jsonrpc.php
+    isDefault: true
+    jsonData:
+      alerting: true
+      authType: user and password
+      cacheTTL: 1h
+      tlsSkipVerify: true      # as deployed (finding G2 in docs/live-inventory.md); set false once the Zabbix certificate chain is trusted
+      trends: true
+      username: grafana-ro
+    secureJsonData:
+      password: $ZABBIX_GRAFANA_PASSWORD
+  - name: NetFlow ClickHouse
+    uid: netflow-clickhouse
+    type: grafana-clickhouse-datasource
+    access: proxy
+    isDefault: false
+    jsonData:
+      defaultDatabase: default
+      dialTimeout: "10"
+      host: 192.168.1.195
+      port: 8123
+      protocol: http
+      queryTimeout: "30"
+      secure: false
+      username: grafana_ro
+      validateSql: false
+    secureJsonData:
+      password: $CLICKHOUSE_RO_PASSWORD
