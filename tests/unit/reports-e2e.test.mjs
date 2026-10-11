@@ -66,12 +66,20 @@ test('e2e: a complete day produces both PDFs and delivers them by e-mail and Tel
   // telegram
   assert.deepEqual(r.tg.calls.map((c) => c.method), ['sendMessage', 'sendDocument', 'sendDocument']);
   assert.match(r.tg.calls[0].fields.text, /Daily network traffic - 2026-10-11/);
-  // a second run for the same day must not send anything again
+  // a second run for the same day sends nothing again - and does not even query Grafana or print PDFs
+  const queries = r.g.stats.dsQueries, renders = r.g.stats.renders;
   const again = await r.run();
   assert.equal(again.exitCode, 0);
+  assert.equal(again.skipped, true);
+  assert.equal(r.g.stats.dsQueries, queries);
+  assert.equal(r.g.stats.renders, renders);
   assert.equal(r.smtp.messages.length, 1);
   assert.equal(r.tg.calls.length, 3);
-  assert.deepEqual(Object.values(again.delivery).map((d) => d.status), ['duplicate', 'duplicate']);
+  // --force regenerates and resends deliberately
+  const forced = await r.run({ force: true });
+  assert.equal(forced.exitCode, 0);
+  assert.equal(r.smtp.messages.length, 2);
+  assert.equal(r.tg.calls.length, 6);
   await r.done();
 });
 

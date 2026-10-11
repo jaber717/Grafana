@@ -155,6 +155,15 @@ export async function runDaily({ settings, now = Date.now(), date = null, kinds 
   const g = deps.grafana || new Grafana({ url: settings.grafana.url, token: settings.grafana.token });
   const selected = (kinds || settings.kinds);
   log({ event: 'run-start', date: win.date, kinds: selected, demo: !!demo, force });
+  // Every enabled channel already delivered this day (timer fired twice, manual repeat): nothing to do, and no reason to query Grafana again.
+  if (!force && !noDeliver && !demo && (settings.email.enabled || settings.telegram.enabled)) {
+    const sent = (ch) => { try { return JSON.parse(readFileSync(join(settings.stateDir, 'ledger', `${win.date}.${ch}.json`), 'utf8')).status === 'sent'; } catch { return false; } };
+    const enabled = [settings.email.enabled && 'email', settings.telegram.enabled && 'telegram'].filter(Boolean);
+    if (enabled.every(sent)) {
+      log({ event: 'already-delivered', date: win.date, channels: enabled, note: 'use --force to regenerate and resend' });
+      return { exitCode: 0, win, results: [], delivery: {}, skipped: true };
+    }
+  }
   const results = [];
   try {
     for (const k of selected) results.push(await generateOne(k, { g, win, prevWin, nowMs: now, settings, outDir: settings.outputDir, demo, keepHtml, log, deps }));

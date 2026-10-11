@@ -30,6 +30,9 @@ export function headline(model) {
   ];
 }
 
+// The headline rows already state the first two observations (volumes/peaks, resp. reporting count/busiest interface): do not repeat them.
+const extraObservations = (m) => (m.status === 'NO_DATA' ? m.observations : m.observations.slice(2));
+
 const title = (m) => (m.kind === 'netflow' ? 'Daily NetFlow Traffic Report' : 'Daily Interface Traffic Report');
 
 export function emailSubject({ prefix, date, models, demo }) {
@@ -44,7 +47,7 @@ export function emailText({ date, models, files, demo }) {
   for (const m of models) {
     out.push(`${title(m)}: ${statusText(m.status)}`);
     for (const h of headline(m)) out.push(`  ${h.label}: ${h.value}`);
-    for (const o of m.observations) out.push(`  - ${o}`);
+    for (const o of extraObservations(m)) out.push(`  - ${o}`);
     out.push('');
   }
   out.push('Attached:', ...files.map((f) => `  ${f.filename} (${Math.round(f.bytes / 1024)} KB)`), '', 'This is an automatically generated message.');
@@ -61,7 +64,7 @@ export function emailHtml({ date, models, files, demo, grafanaUrl }) {
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:10px;border-collapse:collapse">
     ${headline(m).map((h) => `<tr><td style="padding:5px 0;border-bottom:1px solid #EBEEF2;font-size:12px;color:#5F6B7A;width:38%">${esc(h.label)}</td><td style="padding:5px 0;border-bottom:1px solid #EBEEF2;font-size:13px;color:#1F2933;font-weight:500">${esc(h.value)}</td></tr>`).join('')}
   </table>
-  <ul style="margin:12px 0 0 0;padding-left:18px;font-size:12.5px;line-height:1.55;color:#33404D">${m.observations.map((o) => `<li>${esc(o)}</li>`).join('')}</ul>`}
+  ${extraObservations(m).length ? `<ul style="margin:12px 0 0 0;padding-left:18px;font-size:12.5px;line-height:1.55;color:#33404D">${extraObservations(m).map((o) => `<li>${esc(o)}</li>`).join('')}</ul>` : ''}`}
 </td></tr>`;
   return `<!doctype html><html><body style="margin:0;padding:0;background:#EEF1F5;font-family:Segoe UI,Helvetica,Arial,sans-serif">
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#EEF1F5"><tr><td align="center" style="padding:24px 12px">
