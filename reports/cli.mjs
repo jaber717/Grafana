@@ -8,6 +8,7 @@
 //   check-config      validate settings, interface list, Chromium, Grafana access and dashboard revisions
 //   build-dashboards  generate the two report dashboards from the interface list; --apply installs them in "NOC / Daily Reports"
 //   discover          READ-ONLY: propose interface candidates from Zabbix (all include: false) or check an existing mapping (--compare)
+//   schedule          show | set HH:MM | enable | disable the daily timer (systemd drop-in; default 07:00 Asia/Riyadh, disabled until enabled)
 //   status            show the last run and delivery ledger of a day
 //   demo              build DEMO example reports against a DISPOSABLE Grafana with the TestData datasource (never operational data)
 //
@@ -188,6 +189,35 @@ async function main() {
       const ld = join(settings.stateDir, 'ledger');
       if (existsSync(ld)) for (const f of readdirSync(ld).filter((x) => x.startsWith(win.date) && x.endsWith('.json'))) { const l = JSON.parse(readFileSync(join(ld, f), 'utf8')); console.log(`${f}: ${l.status || 'in progress'}, delivered ${l.delivered.length}, attempts ${l.history.length}`); }
       return 0;
+    }
+    case 'schedule': {
+      // grafana-report schedule show | set HH:MM | enable | disable   (needs root; writes a systemd drop-in, never edits the shipped unit)
+      const sub = argv.find((a) => !a.startsWith('--')) || 'show';
+      const sc = (...a) => spawnSync('systemctl', a, { encoding: 'utf8' });
+      if (sub === 'show') {
+        const r = sc('list-timers', 'grafana-report.timer', '--no-pager');
+        console.log(r.stdout || r.stderr);
+        console.log((sc('cat', 'grafana-report.timer').stdout || '').split('\n').filter((l) => /OnCalendar|^#/.test(l) || l.includes('schedule.conf')).join('\n'));
+        return 0;
+      }
+      if (sub === 'set') {
+        const t = argv[argv.indexOf('set') + 1];
+        const m = String(t || '').match(/^([01]?\d|2[0-3]):([0-5]\d)$/);
+        if (!m) fail('usage: grafana-report schedule set HH:MM   (24 h, Asia/Riyadh)');
+        const spec = `*-*-* ${m[1].padStart(2, '0')}:${m[2]}:00 Asia/Riyadh`;
+        const v = spawnSync('systemd-analyze', ['calendar', spec], { encoding: 'utf8' });
+        if (v.status !== 0) fail(`systemd rejects the schedule "${spec}": ${v.stderr}`);
+        const dir = '/etc/systemd/system/grafana-report.timer.d';
+        mkdirSync(dir, { recursive: true });
+        writeFileSync(join(dir, 'schedule.conf'), `[Timer]\nOnCalendar=\nOnCalendar=${spec}\n`);
+        sc('daemon-reload');
+        if (sc('is-enabled', 'grafana-report.timer').stdout.trim() === 'enabled') sc('restart', 'grafana-report.timer');
+        console.log(`schedule set to ${spec}\n${v.stdout.split('\n').filter((l) => /Next elapse|UTC/.test(l)).join('\n')}`);
+        return 0;
+      }
+      if (sub === 'enable' || sub === 'disable') { const r = sc(sub === 'enable' ? 'enable' : 'disable', '--now', 'grafana-report.timer'); console.log(r.stderr || `timer ${sub}d`); return r.status; }
+      fail('usage: grafana-report schedule show | set HH:MM | enable | disable');
+      return 1;
     }
     case 'demo': return demo();
     default:

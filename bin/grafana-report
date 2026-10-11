@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# grafana-report - wrapper that finds Node.js and runs reports/cli.mjs from the release it belongs to.
+set -euo pipefail
+SELF=$(readlink -f "${BASH_SOURCE[0]}")
+ROOT=$(cd "$(dirname "$SELF")/.." && pwd)
+OPT=${GP_OPT:-/opt/grafana-platform}
+NODE=
+for n in "$(command -v node 2>/dev/null || true)" /usr/local/bin/node "$OPT/node/bin/node"; do [ -n "$n" ] && [ -x "$n" ] && { NODE=$n; break; }; done
+[ -n "$NODE" ] || { echo "ERROR: Node.js >= 18 not found (the offline bundle installs it under $OPT/node)" >&2; exit 1; }
+exec "$NODE" "$ROOT/reports/cli.mjs" "$@"

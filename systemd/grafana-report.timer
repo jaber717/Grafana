@@ -1,0 +1,12 @@
+[Unit]
+Description=Grafana daily network traffic reports - schedule (default 07:00 Asia/Riyadh)
+
+[Timer]
+# Change the time with:  grafana-report schedule set 07:30   (writes a drop-in; this file is never edited)
+OnCalendar=*-*-* 07:00:00 Asia/Riyadh
+Persistent=true
+AccuracySec=1min
+RandomizedDelaySec=0
+
+[Install]
+WantedBy=timers.target

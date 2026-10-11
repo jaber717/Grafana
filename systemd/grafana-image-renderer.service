@@ -1,0 +1,24 @@
+[Unit]
+Description=Grafana Image Renderer (pinned container image) for the daily reports
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+# Run this on the host that holds the renderer (a separate host is recommended; see docs/DAILY-REPORTS.md "Sizing and placement").
+# /etc/grafana-platform/reports/renderer.env defines RENDERER_IMAGE (digest-pinned), RENDERER_ADDR (default 127.0.0.1:8081), AUTH_TOKEN,
+# RENDERER_MEMORY and RENDERER_CPUS.
+EnvironmentFile=/etc/grafana-platform/reports/renderer.env
+ExecStartPre=-/usr/bin/podman rm -f grafana-image-renderer
+ExecStart=/usr/bin/podman run --rm --name grafana-image-renderer --network host \
+  -e SERVER_ADDR=${RENDERER_ADDR} -e AUTH_TOKEN \
+  -e BROWSER_MIN_WIDTH=300 -e BROWSER_MIN_HEIGHT=100 \
+  --memory ${RENDERER_MEMORY} --cpus ${RENDERER_CPUS} --pids-limit 512 \
+  --security-opt no-new-privileges --cap-drop ALL --read-only --tmpfs /tmp:rw,size=512m \
+  ${RENDERER_IMAGE}
+ExecStop=/usr/bin/podman stop -t 20 grafana-image-renderer
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target

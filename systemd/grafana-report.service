@@ -1,0 +1,37 @@
+[Unit]
+Description=Grafana daily network traffic reports - generate and deliver (previous Asia/Riyadh day)
+Documentation=file:///opt/grafana-platform/current/docs/DAILY-REPORTS.md
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=grafana-report
+Group=grafana-report
+Environment=REPORT_SETTINGS=/etc/grafana-platform/reports/report.env
+# rootless Podman (PDF printing in the pinned renderer image) needs a home and a runtime directory
+Environment=HOME=/var/lib/grafana-report/home
+Environment=XDG_RUNTIME_DIR=/run/grafana-report
+RuntimeDirectory=grafana-report
+RuntimeDirectoryMode=0700
+StateDirectory=grafana-report
+StateDirectoryMode=0750
+LogsDirectory=grafana-report
+ExecStart=/usr/local/sbin/grafana-report run
+TimeoutStartSec=30min
+# a failed delivery or generation must be visible in `systemctl status` and journald; the timer retries the next day, `grafana-report run` can be repeated safely
+# (duplicate protection) at any time
+Nice=10
+# hardening that is compatible with rootless Podman (NoNewPrivileges and RestrictNamespaces cannot be used: Podman needs setuid newuidmap and user namespaces)
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/grafana-report /var/log/grafana-report
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+LockPersonality=yes
+RestrictRealtime=yes
+SystemCallArchitectures=native
+UMask=0027
