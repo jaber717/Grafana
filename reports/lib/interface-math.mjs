@@ -55,6 +55,39 @@ export function summarizeInterface(samples, { bits = 64, speedBps = null, expect
   };
 }
 
+// Rate series: the Zabbix interface items ("Bits received" / "Bits sent") are already rates in bit/s - Zabbix converts the SNMP counters
+// itself, so a counter reset arrives as a missing sample, never as a huge value. Samples are bucket averages [{t, bps}] where each
+// bucket covers stepS seconds (the report queries 5-minute buckets). A missing bucket is missing data, never zero.
+export function summarizeRates(samples, { speedBps = null, expectedS = null, stepS = 300, overspeedFactor = 1.05 } = {}) {
+  const hasSpeed = speedBps != null && speedBps > 0;
+  const seen = new Set();
+  let bytes = 0, covered = 0, peak = null, peakAt = null, anomalies = 0, invalid = 0;
+  for (const s of samples) {
+    if (s.bps == null || !Number.isFinite(s.bps) || s.bps < 0) { invalid++; continue; }
+    if (seen.has(s.t)) { invalid++; continue; }          // duplicate timestamp: never counted twice
+    seen.add(s.t);
+    if (hasSpeed && s.bps > speedBps * overspeedFactor) { anomalies++; continue; }
+    bytes += (s.bps * stepS) / 8;
+    covered += stepS;
+    if (peak == null || s.bps > peak) { peak = s.bps; peakAt = s.t; }
+  }
+  const avgBps = covered > 0 ? (bytes * 8) / covered : null;
+  return {
+    bytes: covered > 0 ? bytes : null,
+    avgBps,
+    peakBps: peak,
+    peakAt,
+    avgUtilPct: hasSpeed && avgBps != null ? round1((avgBps / speedBps) * 100) : null,
+    peakUtilPct: hasSpeed && peak != null ? round1((peak / speedBps) * 100) : null,
+    coverage: expectedS ? Math.min(1, covered / expectedS) : null,
+    coveredS: covered,
+    buckets: seen.size - anomalies,
+    anomalies,
+    invalid,
+    speedKnown: hasSpeed,
+  };
+}
+
 // Totals across interfaces are meaningful only when the selected interfaces do not overlap (a LAG and its members, a sub-interface and
 // its parent, the same link seen twice). Refuse instead of double counting. rows: [{key, overlapsWith: [], summary}]
 export function nonOverlappingTotal(rows) {

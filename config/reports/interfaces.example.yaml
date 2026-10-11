@@ -1,0 +1,56 @@
+# Daily Interface Traffic report - which interfaces are reported.
+# Copy to /etc/grafana-platform/reports/interfaces.yaml and edit. Nothing here is a Zabbix item id: items are selected by device
+# (Zabbix host name) and item NAME, so the same file works on LAB and on a production Zabbix that has the same host names.
+#
+# Rules (enforced by the loader, see reports/lib/config.mjs):
+#   include        mandatory true/false per interface - interfaces are never included automatically
+#   boundary       optional. A total (e.g. "site WAN") is computed only for interfaces sharing a boundary id; interfaces
+#                  without a boundary are listed on their own and never added together
+#   overlaps_with  list of "device:interface" this interface overlaps (LAG members, sub-interfaces); two overlapping interfaces
+#                  in the same boundary make the configuration invalid
+#   speed          100M, 1G, 10Gbps or bit/s. Leave empty if unknown: utilisation then shows N/A, never a made-up percentage
+#   traffic_direction  provider-facing (default): received = INBOUND (download) | customer-facing: received = OUTBOUND
+#   rx_item/tx_item    only if the Zabbix item names differ from "Interface <if>(<description>): Bits received/sent"
+
+groups:
+  - id: wan
+    title: WAN uplinks
+  - id: spare
+    title: Not reported (examples of excluded interfaces)
+
+interfaces:
+  # --- SITE-A / SITE-B WAN interfaces present in the LAB Zabbix --------------------------------------------------------------
+  - site: SITE-A
+    device: SITE-A
+    interface: Gi0/0
+    description: TO-SAIX-A-Gi0/1
+    speed: 1G
+    group: wan
+    boundary: SITE-A-WAN
+    include: true
+
+  - site: SITE-B
+    device: SITE-B
+    interface: Gi0/0
+    description: TO-SAIX-B-Gi0/1
+    speed: 1G
+    group: wan
+    boundary: SITE-B-WAN
+    include: true
+
+  # --- present in Zabbix but intentionally not reported until someone decides to onboard them ---------------------------------
+  - site: STC
+    device: STC
+    interface: Gi0/0
+    description: TO-INT-CORE-Gi0/0
+    speed: 1G
+    group: spare
+    include: false
+
+  - site: MOBILY
+    device: MOBILY
+    interface: Gi0/0
+    description: TO-INT-CORE-Gi0/1
+    speed: 1G
+    group: spare
+    include: false
