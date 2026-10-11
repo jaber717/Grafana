@@ -4,7 +4,7 @@
 // folders.json, datasources.json (definitions only: Grafana never returns secrets), playlists.json, alert-rules.json,
 // contact-points.json, policies.json, mute-timings.json, templates.json, org-preferences.json, plugins.json, users.json (login/role only)
 // and manifest.json (SHA-256 of every file + Grafana version). Nothing is written to Grafana. Keeps the newest --keep backups.
-// For the database file and /etc/grafana use scripts/backup-lxc.sh inside the container.
+// For the database file and /etc/grafana use lab/scripts/backup-lxc.sh inside the container.
 import { mkdirSync, writeFileSync, readdirSync, rmSync, chmodSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { get, URL_, parseArgs, stamp, sha256, fail } from './lib/grafana.mjs';

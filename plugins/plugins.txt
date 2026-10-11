@@ -1,4 +1,4 @@
-# Plugins the dashboards/datasources need. "id version" as shown by /api/plugins on grafana-01 (2026-10-10).
-# Install with: grafana cli plugins install <id> <version>   (scripts/install-lxc.sh does this)
-alexanderzobnin-zabbix-app          6.8.0   # also provides alexanderzobnin-zabbix-datasource and alexanderzobnin-zabbix-triggers-panel
-grafana-clickhouse-datasource       4.22.0
+# Plugins the dashboards/datasources need. Columns: id  version  sha256 of the linux-amd64 package as published by the grafana.com API (verified before extraction, online and offline).
+# grafana-platform downloads https://grafana.com/api/plugins/<id>/versions/<version>/download?os=linux&arch=amd64 (or takes <id>-<version>.zip from the offline bundle).
+alexanderzobnin-zabbix-app     6.8.0   121c752d9c6e4bb694b6247cfbed3395652f4ee3153f6236ddb525f4803a8931   # also provides alexanderzobnin-zabbix-datasource and alexanderzobnin-zabbix-triggers-panel
+grafana-clickhouse-datasource  4.22.0  2041f4c32160aeedc36c6e51cc996542b44c27f4595dd33546cb18018b30b8d8

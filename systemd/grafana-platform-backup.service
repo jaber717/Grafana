@@ -1,0 +1,8 @@
+[Unit]
+Description=Grafana platform - backup (database, configuration, content export)
+After=grafana-server.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/grafana-platform backup --yes
+TimeoutStartSec=1h

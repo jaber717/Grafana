@@ -1,0 +1,247 @@
+{
+ "_comment": "LAB Zabbix items behind the NOC dashboards, resolved through the live datasource on 2026-10-10. A production Zabbix has different item ids: tools/zabbix-item-map.mjs resolves these host + item_key pairs there. Entries with unresolved=true had no data when captured and need a manual mapping.",
+ "items": {
+  "51128": {
+   "host": "SITE-A",
+   "item": "ICMP ping",
+   "item_key": "icmpping"
+  },
+  "51140": {
+   "unresolved": true,
+   "used_in": [
+    "noc-device-health | SITE-A | UP"
+   ]
+  },
+  "51141": {
+   "host": "SITE-A",
+   "item": "SNMP agent availability",
+   "item_key": "zabbix[host,snmp,available]"
+  },
+  "51178": {
+   "host": "SITE-B",
+   "item": "ICMP ping",
+   "item_key": "icmpping"
+  },
+  "51190": {
+   "unresolved": true,
+   "used_in": [
+    "noc-device-health | SITE-B | UP"
+   ]
+  },
+  "51191": {
+   "host": "SITE-B",
+   "item": "SNMP agent availability",
+   "item_key": "zabbix[host,snmp,available]"
+  },
+  "51228": {
+   "host": "STC",
+   "item": "ICMP ping",
+   "item_key": "icmpping"
+  },
+  "51246": {
+   "unresolved": true,
+   "used_in": [
+    "noc-device-health | STC | UP"
+   ]
+  },
+  "51250": {
+   "host": "STC",
+   "item": "SNMP agent availability",
+   "item_key": "zabbix[host,snmp,available]"
+  },
+  "51278": {
+   "host": "MOBILY",
+   "item": "ICMP ping",
+   "item_key": "icmpping"
+  },
+  "51296": {
+   "unresolved": true,
+   "used_in": [
+    "noc-device-health | MOBILY | UP"
+   ]
+  },
+  "51300": {
+   "host": "MOBILY",
+   "item": "SNMP agent availability",
+   "item_key": "zabbix[host,snmp,available]"
+  },
+  "51328": {
+   "host": "INT-CORE",
+   "item": "ICMP ping",
+   "item_key": "icmpping"
+  },
+  "51346": {
+   "unresolved": true,
+   "used_in": [
+    "noc-device-health | INT-CORE | UP"
+   ]
+  },
+  "51350": {
+   "host": "INT-CORE",
+   "item": "SNMP agent availability",
+   "item_key": "zabbix[host,snmp,available]"
+  },
+  "51378": {
+   "host": "SAIX-A",
+   "item": "ICMP ping",
+   "item_key": "icmpping"
+  },
+  "51396": {
+   "unresolved": true,
+   "used_in": [
+    "noc-device-health | SAIX-A | UP"
+   ]
+  },
+  "51400": {
+   "host": "SAIX-A",
+   "item": "SNMP agent availability",
+   "item_key": "zabbix[host,snmp,available]"
+  },
+  "51428": {
+   "host": "SAIX-B",
+   "item": "ICMP ping",
+   "item_key": "icmpping"
+  },
+  "51446": {
+   "unresolved": true,
+   "used_in": [
+    "noc-device-health | SAIX-B | UP"
+   ]
+  },
+  "51450": {
+   "host": "SAIX-B",
+   "item": "SNMP agent availability",
+   "item_key": "zabbix[host,snmp,available]"
+  },
+  "51487": {
+   "host": "STC",
+   "item": "Interface Gi0/0(TO-INT-CORE-Gi0/0): Bits received",
+   "item_key": "net.if.in[ifHCInOctets.1]"
+  },
+  "51496": {
+   "host": "STC",
+   "item": "Interface Gi0/0(TO-INT-CORE-Gi0/0): Bits sent",
+   "item_key": "net.if.out[ifHCOutOctets.1]"
+  },
+  "51506": {
+   "host": "STC",
+   "item": "#1: CPU utilization",
+   "item_key": "system.cpu.util[cpmCPUTotal5minRev.1]"
+  },
+  "51512": {
+   "host": "MOBILY",
+   "item": "Processor: Memory utilization",
+   "item_key": "vm.memory.util[vm.memory.util.1]"
+  },
+  "51519": {
+   "host": "STC",
+   "item": "Processor: Memory utilization",
+   "item_key": "vm.memory.util[vm.memory.util.1]"
+  },
+  "51528": {
+   "host": "SAIX-B",
+   "item": "Interface Gi0/0(TO-SAIX-CORE-Gi0/1): Bits received",
+   "item_key": "net.if.in[ifHCInOctets.1]"
+  },
+  "51537": {
+   "host": "SAIX-B",
+   "item": "Interface Gi0/0(TO-SAIX-CORE-Gi0/1): Bits sent",
+   "item_key": "net.if.out[ifHCOutOctets.1]"
+  },
+  "51548": {
+   "host": "SITE-B",
+   "item": "Processor: Memory utilization",
+   "item_key": "vm.memory.util[vm.memory.util.1]"
+  },
+  "51554": {
+   "host": "SITE-B",
+   "item": "#1: CPU utilization",
+   "item_key": "system.cpu.util[cpmCPUTotal5minRev.1]"
+  },
+  "51555": {
+   "host": "SAIX-B",
+   "item": "#1: CPU utilization",
+   "item_key": "system.cpu.util[cpmCPUTotal5minRev.1]"
+  },
+  "51570": {
+   "host": "SITE-B",
+   "item": "Interface Gi0/0(TO-SAIX-B-Gi0/1): Bits received",
+   "item_key": "net.if.in[ifHCInOctets.1]"
+  },
+  "51585": {
+   "host": "SITE-B",
+   "item": "Interface Gi0/0(TO-SAIX-B-Gi0/1): Bits sent",
+   "item_key": "net.if.out[ifHCOutOctets.1]"
+  },
+  "51610": {
+   "host": "SAIX-A",
+   "item": "Interface Gi0/0(TO-SAIX-CORE-Gi0/0): Bits received",
+   "item_key": "net.if.in[ifHCInOctets.1]"
+  },
+  "51619": {
+   "host": "SAIX-A",
+   "item": "Interface Gi0/0(TO-SAIX-CORE-Gi0/0): Bits sent",
+   "item_key": "net.if.out[ifHCOutOctets.1]"
+  },
+  "51630": {
+   "host": "SITE-A",
+   "item": "Processor: Memory utilization",
+   "item_key": "vm.memory.util[vm.memory.util.1]"
+  },
+  "51636": {
+   "host": "SITE-A",
+   "item": "#1: CPU utilization",
+   "item_key": "system.cpu.util[cpmCPUTotal5minRev.1]"
+  },
+  "51637": {
+   "host": "SAIX-A",
+   "item": "#1: CPU utilization",
+   "item_key": "system.cpu.util[cpmCPUTotal5minRev.1]"
+  },
+  "51639": {
+   "host": "SAIX-B",
+   "item": "Processor: Memory utilization",
+   "item_key": "vm.memory.util[vm.memory.util.1]"
+  },
+  "51661": {
+   "host": "SITE-A",
+   "item": "Interface Gi0/0(TO-SAIX-A-Gi0/1): Bits received",
+   "item_key": "net.if.in[ifHCInOctets.1]"
+  },
+  "51679": {
+   "host": "SITE-A",
+   "item": "Interface Gi0/0(TO-SAIX-A-Gi0/1): Bits sent",
+   "item_key": "net.if.out[ifHCOutOctets.1]"
+  },
+  "51735": {
+   "host": "INT-CORE",
+   "item": "#1: CPU utilization",
+   "item_key": "system.cpu.util[cpmCPUTotal5minRev.1]"
+  },
+  "51741": {
+   "host": "SAIX-A",
+   "item": "Processor: Memory utilization",
+   "item_key": "vm.memory.util[vm.memory.util.1]"
+  },
+  "51751": {
+   "host": "MOBILY",
+   "item": "Interface Gi0/0(TO-INT-CORE-Gi0/1): Bits received",
+   "item_key": "net.if.in[ifHCInOctets.1]"
+  },
+  "51760": {
+   "host": "MOBILY",
+   "item": "Interface Gi0/0(TO-INT-CORE-Gi0/1): Bits sent",
+   "item_key": "net.if.out[ifHCOutOctets.1]"
+  },
+  "51770": {
+   "host": "MOBILY",
+   "item": "#1: CPU utilization",
+   "item_key": "system.cpu.util[cpmCPUTotal5minRev.1]"
+  },
+  "51776": {
+   "host": "INT-CORE",
+   "item": "Processor: Memory utilization",
+   "item_key": "vm.memory.util[vm.memory.util.1]"
+  }
+ }
+}

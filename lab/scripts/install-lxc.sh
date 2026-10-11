@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # install-lxc.sh — install the pinned Grafana + plugins on a Debian 12 host/LXC (run INSIDE grafana-01, as root).
 #
-#   scripts/install-lxc.sh [--dry-run] [--provisioning] [--skip-lxc-dropin-check]
+#   lab/scripts/install-lxc.sh [--dry-run] [--provisioning] [--skip-lxc-dropin-check]
 #
 # * Installs the exact Grafana version from VERSIONS.env from the official APT repository and holds the package
-#   (upgrades only through scripts/upgrade-lxc.sh).
+#   (upgrades only through lab/scripts/upgrade-lxc.sh).
 # * Installs the plugins listed in plugins/plugins.txt at their pinned versions.
 # * --provisioning also installs provisioning/ (datasources + dashboard providers) and the dashboards under /var/lib/grafana/dashboards.
 #   Without it the content is applied afterwards from a workstation with scripts/apply.sh (API mode, the mode used on grafana-01 today).
@@ -15,7 +15,7 @@
 # (/etc/systemd/system/grafana-server.service.d/lxc.conf) — there was no filesystem access to the container when this repository was
 # captured. On an LXC the script refuses to start Grafana unless that file exists (or you pass --skip-lxc-dropin-check).
 set -euo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")/.."
+cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 # shellcheck disable=SC1091
 . ./VERSIONS.env
 DRY=0; PROV=0; SKIPLXC=0
@@ -35,7 +35,7 @@ INSTALLED=$(dpkg-query -W -f='${Version}' grafana 2>/dev/null || true)
 if [ "${INSTALLED%%-*}" = "$GRAFANA_VERSION" ]; then
   log "grafana $GRAFANA_VERSION already installed"
 else
-  [ -n "$INSTALLED" ] && die "grafana $INSTALLED is installed; use scripts/upgrade-lxc.sh (it backs up first)"
+  [ -n "$INSTALLED" ] && die "grafana $INSTALLED is installed; use lab/scripts/upgrade-lxc.sh (it backs up first)"
   log "adding the official Grafana APT repository"
   run apt-get update -qq
   run apt-get install -y -qq apt-transport-https ca-certificates curl gnupg

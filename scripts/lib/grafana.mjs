@@ -4,6 +4,9 @@
 //   GRAFANA_TOKEN                service-account / API token (preferred), OR
 //   GRAFANA_USER + GRAFANA_PASSWORD
 import { readFileSync, readdirSync, statSync } from 'node:fs';
+import http from 'node:http';
+import https from 'node:https';
+import tls from 'node:tls';
 import { createHash } from 'node:crypto';
 import { join, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -23,12 +26,33 @@ export function fail(msg, code = 1) { console.error('ERROR: ' + msg); process.ex
 
 export class ApiError extends Error { constructor(method, path, status, body) { super(`${method} ${path} -> ${status} ${String(body).slice(0, 300)}`); this.status = status; } }
 
+// HTTP(S) transport. Honours two optional environment variables for TLS deployments:
+//   GRAFANA_CA_FILE        PEM bundle trusted IN ADDITION to the system store (Node's default roots are kept)
+//   GRAFANA_CONNECT_ADDR   connect to this address while keeping the URL's host name for the Host header, SNI and certificate
+//                          verification (used by grafana-platform to talk to the local instance by its public certificate name)
+function request(method, url, headers, body) {
+  const u = new URL(url);
+  const lib = u.protocol === 'https:' ? https : http;
+  const opts = { method, headers: { ...headers, ...(body !== undefined ? { 'Content-Length': Buffer.byteLength(body) } : {}) }, timeout: 60000 };
+  if (u.protocol === 'https:') {
+    opts.servername = u.hostname;
+    if (process.env.GRAFANA_CA_FILE) opts.ca = [...tls.rootCertificates, readFileSync(process.env.GRAFANA_CA_FILE, 'utf8')];
+  }
+  if (process.env.GRAFANA_CONNECT_ADDR) opts.lookup = (_h, _o, cb) => (_o && _o.all ? cb(null, [{ address: process.env.GRAFANA_CONNECT_ADDR, family: process.env.GRAFANA_CONNECT_ADDR.includes(':') ? 6 : 4 }]) : cb(null, process.env.GRAFANA_CONNECT_ADDR, process.env.GRAFANA_CONNECT_ADDR.includes(':') ? 6 : 4));
+  return new Promise((resolve, reject) => {
+    const req = lib.request(u, opts, (res) => { const chunks = []; res.on('data', (c) => chunks.push(c)); res.on('end', () => resolve({ status: res.statusCode, text: Buffer.concat(chunks).toString('utf8') })); });
+    req.on('timeout', () => req.destroy(new Error('request timed out')));
+    req.on('error', reject);
+    if (body !== undefined) req.write(body);
+    req.end();
+  });
+}
+
 export async function api(method, path, body, { allow404 = false } = {}) {
-  const r = await fetch(URL_ + path, { method, headers: authHeaders(), body: body === undefined ? undefined : JSON.stringify(body) });
-  const text = await r.text();
-  let json; try { json = text ? JSON.parse(text) : null; } catch { json = text; }
+  const r = await request(method, URL_ + path, authHeaders(), body === undefined ? undefined : JSON.stringify(body));
+  let json; try { json = r.text ? JSON.parse(r.text) : null; } catch { json = r.text; }
   if (r.status === 404 && allow404) return null;
-  if (!r.ok) throw new ApiError(method, path, r.status, text);
+  if (r.status < 200 || r.status >= 300) throw new ApiError(method, path, r.status, r.text);
   return json;
 }
 export const get = (path, opts) => api('GET', path, undefined, opts);

@@ -7,3 +7,8 @@
 *.env text eol=lf
 *.txt text eol=lf
 VERSION text eol=lf
+*.py text eol=lf
+*.example text eol=lf
+*.tmpl text eol=lf
+bin/* text eol=lf
+RPM-GPG-KEY-* text eol=lf

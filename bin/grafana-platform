@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# grafana-platform — install, verify and operate Grafana OSS on RHEL 9.x from this repository (native RPM + systemd).
+#
+#   grafana-platform preflight  [--env-file F]            read-only readiness checks
+#   grafana-platform install    [--env-file F]            idempotent: FRESH install or MANAGED re-converge; refuses CONFLICT
+#   grafana-platform verify                               PASS/WARN/FAIL health, security and content verification
+#   grafana-platform status                               one-screen summary
+#   grafana-platform backup     [--include-secrets]       consistent archive (database + config + content export)
+#   grafana-platform restore    <archive> [--yes]         restore an archive (saves the current state first)
+#   grafana-platform upgrade    [--yes]                   move to the Grafana version pinned in this release (backup first, auto-rollback)
+#   grafana-platform rollback   [<archive>] [--yes]       return to the state saved by the last upgrade
+#   grafana-platform rotate-secrets                       push changed zabbix-password / clickhouse-password files into the datasources
+#   grafana-platform version
+#
+# Run as root. The release (this directory) is copied to /opt/grafana-platform/releases/<version> by `install`, and this command is linked
+# to /usr/local/sbin/grafana-platform.
+set -euo pipefail
+set -o errtrace
+
+SELF=$(readlink -f "${BASH_SOURCE[0]}")
+RELEASE_DIR=$(cd "$(dirname "$SELF")/.." && pwd)
+LIBDIR="$RELEASE_DIR/lib"
+# shellcheck disable=SC1091
+. "$RELEASE_DIR/VERSIONS.env"
+# shellcheck disable=SC1091
+. "$LIBDIR/common.sh"
+# shellcheck disable=SC1091
+. "$LIBDIR/preflight.sh"
+# shellcheck disable=SC1091
+. "$LIBDIR/install.sh"
+# shellcheck disable=SC1091
+. "$LIBDIR/ops.sh"
+
+cmd=${1:-}; [ $# -gt 0 ] && shift
+case "$cmd" in
+  preflight) parse_common_args "$@"; load_env; run_preflight "read-only" ;;
+  install)   parse_common_args "$@"; cmd_install ;;
+  verify)    parse_common_args "$@"; cmd_verify ;;
+  status)    parse_common_args "$@"; cmd_status ;;
+  backup)    parse_common_args "$@"; cmd_backup ;;
+  restore)   parse_common_args "$@"; cmd_restore ;;
+  upgrade)   parse_common_args "$@"; cmd_upgrade ;;
+  rollback)  parse_common_args "$@"; cmd_rollback ;;
+  rotate-secrets) parse_common_args "$@"; cmd_rotate_secrets ;;
+  version)   echo "grafana-platform $(cat "$RELEASE_DIR/VERSION") (Grafana $GRAFANA_VERSION, plugins: $(awk '!/^#/ && NF {printf "%s@%s ", $1, $2}' "$RELEASE_DIR/plugins/plugins.txt"))" ;;
+  ""|-h|--help|help) sed -n '2,20p' "$SELF" ;;
+  *) echo "unknown command: $cmd (try --help)" >&2; exit 2 ;;
+esac

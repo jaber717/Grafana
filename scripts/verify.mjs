@@ -3,17 +3,19 @@
 // Checks: health + version, required plugins (id+version), folders, datasource definitions (+ their /health), every dashboard
 // (normalized: id/version ignored), the playlist, and that repository-managed folders contain no unmanaged dashboards.
 // Exit 0 = PASS (WARN allowed), 1 = FAIL.
-import { get, URL_, parseArgs, readJson, repoDashboards, repoPlugins, normalizeDashboard, canonical, dsComparable, fail } from './lib/grafana.mjs';
+import { get, URL_, parseArgs, readJson, repoPlugins, normalizeDashboard, canonical, dsComparable, fail } from './lib/grafana.mjs';
+import { loadContext, effectiveDashboards } from './lib/content.mjs';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ROOT } from './lib/grafana.mjs';
 
 const args = parseArgs(process.argv.slice(2));
+const CTX = loadContext(args);
 const out = []; let failN = 0, warnN = 0;
 const rec = (level, what, detail = '') => { out.push({ level, what, detail }); if (level === 'FAIL') failN++; if (level === 'WARN') warnN++; if (!args.json) console.log(`[${level}] ${what}${detail ? ' - ' + detail : ''}`); };
 
 const health = await get('/api/health').catch((e) => fail(`Grafana is not reachable at ${URL_}: ${e.message}`));
-const wantVersion = readFileSync(join(ROOT, 'VERSIONS.env'), 'utf8').match(/^GRAFANA_VERSION=(.+)$/m)?.[1];
+const wantVersion = process.env.GRAFANA_VERSION_OVERRIDE || readFileSync(join(ROOT, 'VERSIONS.env'), 'utf8').match(/^GRAFANA_VERSION=(.+)$/m)?.[1];
 rec(health.database === 'ok' ? 'PASS' : 'FAIL', 'health', `database=${health.database}`);
 rec(health.version === wantVersion ? 'PASS' : 'WARN', 'Grafana version', `live ${health.version}, repository ${wantVersion}`);
 
@@ -24,7 +26,7 @@ const folders = readJson('config/folders.json');
 const liveFolders = new Map((await get('/api/folders')).map((f) => [f.uid, f.title]));
 for (const f of folders) rec(liveFolders.get(f.uid) === f.title ? 'PASS' : 'FAIL', `folder ${f.uid}`, liveFolders.has(f.uid) ? `title "${liveFolders.get(f.uid)}"` : 'missing');
 
-for (const want of args['skip-datasources'] ? [] : readJson('config/datasources.json')) {
+for (const want of args['skip-datasources'] ? [] : CTX.datasources) {
   const cur = await get(`/api/datasources/uid/${want.uid}`, { allow404: true });
   if (!cur) { rec('FAIL', `datasource ${want.uid}`, 'missing'); continue; }
   rec(canonical(dsComparable(cur)) === canonical(dsComparable(want)) ? 'PASS' : 'FAIL', `datasource ${want.uid} definition`);
@@ -33,8 +35,10 @@ for (const want of args['skip-datasources'] ? [] : readJson('config/datasources.
 }
 
 const managed = new Set();
-for (const { file, folderDir, dashboard } of repoDashboards()) {
+for (const { file, folderDir, dashboard, state, reason } of effectiveDashboards(CTX)) {
   managed.add(dashboard.uid);
+  if (state === 'skipped') { rec('WARN', `dashboard ${dashboard.uid}`, `not deployed: ${reason}`); continue; }
+  if (state === 'refused') { rec('FAIL', `dashboard ${dashboard.uid}`, reason); continue; }
   const cur = await get(`/api/dashboards/uid/${dashboard.uid}`, { allow404: true });
   if (!cur) { rec('FAIL', `dashboard ${dashboard.uid}`, 'missing'); continue; }
   const same = canonical(normalizeDashboard(cur.dashboard)) === canonical(normalizeDashboard(dashboard));

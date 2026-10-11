@@ -2,7 +2,7 @@
 # verify-lxc.sh — READ-ONLY host-level checks inside grafana-01 (run as root; changes nothing).
 # The content checks (dashboards, datasources, playlists) are scripts/verify.sh, run from a workstation through the API.
 set -uo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")/.."
+cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 # shellcheck disable=SC1091
 . ./VERSIONS.env
 FAIL=0; WARN=0
