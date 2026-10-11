@@ -69,7 +69,11 @@ export class Grafana {
     const res = await this.#fetch('GET', `/render/d-solo/${uid}/_?${q}`, undefined, 'image/png');
     const buf = Buffer.from(await res.arrayBuffer());
     if (!res.ok) throw new GrafanaError(`render panel ${panelId}: HTTP ${res.status} ${buf.toString('utf8', 0, 200)}`, { status: res.status, transient: res.status >= 500 });
-    if (buf.length < 8 || buf.readUInt32BE(0) !== 0x89504e47) throw new GrafanaError(`render panel ${panelId}: response is not a PNG`);
+    if (buf.length < 24 || buf.readUInt32BE(0) !== 0x89504e47) throw new GrafanaError(`render panel ${panelId}: response is not a PNG`);
+    const gotW = buf.readUInt32BE(16), gotH = buf.readUInt32BE(20);
+    if (gotW !== width * scale || gotH !== height * scale) {
+      throw new GrafanaError(`render panel ${panelId}: got ${gotW}x${gotH} px, expected ${width * scale}x${height * scale} - the renderer enforces a larger minimum viewport; set BROWSER_MIN_WIDTH=300 and BROWSER_MIN_HEIGHT=100 on the renderer`);
+    }
     return buf;
   }
 

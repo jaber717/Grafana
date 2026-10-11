@@ -94,11 +94,11 @@ export function buildInterfaceModel({ win, cfg, series, prevSeries = {}, prevWin
   // previous day
   const prevBytes = (key) => { const p = prevSeries[key]; if (!p || !prevWin) return null; const a = { speedBps: cfg.interfaces.find((i) => i.key === key).speedBps, expectedS: prevWin.seconds, stepS: BUCKET_S };
     const i = summarizeRates(snap(p.inbound || [], prevWin), a), o = summarizeRates(snap(p.outbound || [], prevWin), a); return (i.bytes == null && o.bytes == null) ? null : { in: i.bytes, out: o.bytes }; };
-  for (const s of list) { const p = prevBytes(s.key); s.change = p ? { inbound: changePct(s.inbound.bytes, p.in), outbound: changePct(s.outbound.bytes, p.out) } : { inbound: null, outbound: null }; }
+  for (const s of list) { const p = s.status === 'COMPLETE' ? prevBytes(s.key) : null; s.change = p ? { inbound: changePct(s.inbound.bytes, p.in), outbound: changePct(s.outbound.bytes, p.out) } : { inbound: null, outbound: null }; }
   // missing-data indicators
   for (const s of list) {
     if (s.status === 'NO_DATA') model.missing.push({ key: s.key, reason: 'no samples for the whole day' });
-    else if (s.status === 'PARTIAL') model.missing.push({ key: s.key, reason: `${fmtPct(s.coverage * 100, 0)} coverage - ${s.missingMinutes} min missing, longest gap ${s.longestGapMinutes} min` });
+    else if (s.status === 'PARTIAL') model.missing.push({ key: s.key, reason: 'incomplete', coverage: s.coverage, missingMinutes: s.missingMinutes, longestGapMinutes: s.longestGapMinutes });
   }
   // observations (facts only)
   const top = model.kpis.busiest[0] && summaries.get(model.kpis.busiest[0]);
@@ -107,7 +107,8 @@ export function buildInterfaceModel({ win, cfg, series, prevSeries = {}, prevWin
   const hot = list.filter((s) => s.peakUtilPct != null && s.peakUtilPct >= 80);
   if (hot.length) model.observations.push(`${hot.length} interface(s) exceeded 80 % utilisation at peak: ${hot.map((h) => `${h.site} ${h.interface} ${fmtPct(h.peakUtilPct)}`).join(', ')}.`);
   const chg = list.filter((s) => s.change?.inbound != null || s.change?.outbound != null);
-  if (!chg.length) model.observations.push('No previous-day data is available, so no comparison is shown.');
+  if (!chg.length) model.observations.push('No previous-day comparison is shown: previous-day data is missing or the interfaces have incomplete coverage.');
+  else if (list.some((s) => s.status === 'PARTIAL')) model.observations.push('Interfaces with incomplete coverage show no previous-day comparison (not comparable with a full day).');
   const an = list.reduce((a, s) => a + s.anomalies, 0);
   if (an) model.observations.push(`${an} sample(s) above the configured speed were excluded - check the interface speed configuration.`);
   if (model.status === 'PARTIAL') model.observations.push('Some interfaces have incomplete data: their volumes understate real traffic (see Technical Details).');

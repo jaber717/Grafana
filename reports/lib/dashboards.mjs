@@ -119,5 +119,22 @@ export function interfaceDashboard(cfg, source = 'live') {
       : [{ ...zbxTarget(it.device, it.inboundItem, 'A'), alias: 'Inbound' }, { ...zbxTarget(it.device, it.outboundItem, 'B'), alias: 'Outbound' }];
     panels.push(panel(interfacePanelId(i), `${it.site} - ${it.interface}${it.description ? ` (${it.description})` : ''}`, 'timeseries', 12, 8, i * 8, fc, tsOptions(), targets, { description: `device=${it.device} group=${it.group}${it.boundary ? ` boundary=${it.boundary}` : ''} speed=${it.speedBps ?? 'unknown'}` }));
   });
+  // Peak utilisation ranking: util % series (live: Zabbix scale(100/speed); DEMO: same values) -> reduce(max) -> sort -> top 10
+  const rated = cfg.interfaces.filter((it) => it.speedBps);
+  const utilTargets = [];
+  rated.forEach((it) => {
+    for (const [dir, item] of [['in', it.inboundItem], ['out', it.outboundItem]]) {
+      const refId = String.fromCharCode(65 + (utilTargets.length % 26)) + (utilTargets.length >= 26 ? String(Math.floor(utilTargets.length / 26)) : '');
+      const alias = `${it.site} ${it.interface} ${dir}`;
+      const pct = (r) => { const v = r[dir === 'in' ? 'Inbound' : 'Outbound']; return v == null ? 'null' : ((v / it.speedBps) * 100).toFixed(2); };
+      utilTargets.push(demo
+        ? { datasource: DS_DEMO, scenarioId: 'csv_metric_values', alias, refId, stringInput: [...demo.byKey[it.key].map(pct), 'null'].join(',') }
+        : { ...zbxTarget(it.device, item, refId, 100 / it.speedBps), alias });
+    }
+  });
+  const utilFc = { defaults: { unit: 'percent', decimals: 1, min: 0, max: 100, noValue: 'NO DATA', color: { mode: 'thresholds' }, thresholds: { mode: 'absolute', steps: [{ color: PALETTE.inbound, value: null }, { color: PALETTE.warn, value: 70 }, { color: PALETTE.crit, value: 90 }] } }, overrides: [] };
+  panels.unshift(panel(2, 'Peak utilisation by interface and direction (top 10, 5-minute averages)', 'bargauge', 24, 9, 0, utilFc,
+    { orientation: 'horizontal', displayMode: 'gradient', valueMode: 'color', namePlacement: 'left', showUnfilled: true, sizing: 'auto', minVizHeight: 14, text: { titleSize: 11, valueSize: 13 }, reduceOptions: { values: true, calcs: [], fields: '/^Max$/' }, legend: { showLegend: false } },
+    utilTargets, { transformations: [{ id: 'reduce', options: { mode: 'seriesToRows', reducers: ['max'], includeTimeField: false } }, { id: 'sortBy', options: { fields: {}, sort: [{ field: 'Max', desc: true }] } }, { id: 'limit', options: { limitField: 10 } }] }));
   return dashboard('rpt-interface-daily', demo ? 'DEMO - Daily Interface Traffic Report' : 'Daily Interface Traffic Report', panels, ['interfaces', 'zabbix']);
 }

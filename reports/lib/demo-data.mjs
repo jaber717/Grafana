@@ -136,7 +136,8 @@ export function interfaceFixture(win, cfg, { scenario = 'normal' } = {}) {
     const p = plan[it.key];
     if (scenario === 'nodata' || !p) { series[it.key] = { inbound: [], outbound: [] }; byKey[it.key] = []; continue; }
     const sp = it.speedBps;
-    const peakIn = p.absolute ? p.absolute[0] : sp * p.inPeak, peakOut = p.absolute ? p.absolute[1] : sp * p.outPeak;
+    // SHAPE overshoots its nominal peak by ~20 %: normalise so the design fractions are the real peaks
+    const peakIn = (p.absolute ? p.absolute[0] : sp * p.inPeak) / 1.22, peakOut = (p.absolute ? p.absolute[1] : sp * p.outPeak) / 1.22;
     const gap = scenario === 'partial' ? p.gap || null : null;
     const gapAlways = p.gap && scenario !== 'normal' ? p.gap : null;
     const iv = dayValues(p.seed, peakIn, gap || gapAlways), ov = dayValues(p.seed + 100, peakOut, gap || gapAlways);

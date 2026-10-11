@@ -23,7 +23,7 @@ export const NETFLOW_QUERIES = {
   },
   trend_total: {
     title: 'Report day total (inbound + outbound)',
-    sql: `SELECT toStartOfInterval(TimeReceived, INTERVAL 5 MINUTE) AS time, sumIf(Bytes * SamplingRate, ${DIR} IN ('inbound', 'outbound')) * 8 / 300 AS `Report day` FROM default.flows_5m0s WHERE ${win()} GROUP BY time ORDER BY time`,
+    sql: `SELECT toStartOfInterval(TimeReceived, INTERVAL 5 MINUTE) AS time, sumIf(Bytes * SamplingRate, ${DIR} IN ('inbound', 'outbound')) * 8 / 300 AS \`Report day\` FROM default.flows_5m0s WHERE ${win()} GROUP BY time ORDER BY time`,
   },
   trend_prev: {
     title: 'Previous day (shifted by 24 h)',

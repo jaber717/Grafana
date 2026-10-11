@@ -39,7 +39,7 @@ ${kpi({ cls: 'in', label: `Inbound${est}`, value: fmtBytes(k.inboundBytes), sub:
 ${kpi({ cls: 'out', label: `Outbound${est}`, value: fmtBytes(k.outboundBytes), sub: `Average ${esc(fmtBps(k.avgOutBps))}`, change: chg(k.change.outbound) })}
 ${kpi({ cls: 'in', label: 'Peak inbound', value: fmtBps(k.peakIn?.bps), sub: k.peakIn ? `at ${fmtClock(k.peakIn.at)} · 5-min average` : '' })}
 ${kpi({ cls: 'out', label: 'Peak outbound', value: fmtBps(k.peakOut?.bps), sub: k.peakOut ? `at ${fmtClock(k.peakOut.at)} · 5-min average` : '' })}
-${kpi({ cls: 'neutral', label: `Total${est}`, value: fmtBytes(k.totalBytes), sub: k.previousAvailable ? 'Inbound + outbound' : 'No previous-day data', change: chg(k.change.total) })}
+${kpi({ cls: 'neutral', label: `Total${est}`, value: fmtBytes(k.totalBytes), sub: k.previousAvailable ? 'Inbound + outbound' : k.comparisonSuppressed ? 'Comparison not shown (incomplete day)' : 'No previous-day data', change: chg(k.change.total) })}
 ${kpi({ cls: m.status === 'COMPLETE' ? 'ok' : 'warn', label: 'Data coverage', value: fmtPct(m.coverage.coverage * 100, 0), sub: `${m.coverage.observed} of ${m.coverage.expected} five-minute intervals` })}
 </div>`;
   const fresh = m.coverage.freshnessS == null ? 'N/A' : fmtAge(m.coverage.freshnessS);
@@ -90,7 +90,7 @@ function noDataHtml(m) {
   const cov = m.coverage;
   const last = cov.lastSampleMs ? `${fmtDateTime(cov.lastSampleMs)} (${fmtAge(cov.freshnessS)})` : 'no flow record found';
   const body1 = `<div class="nodata"><div class="big">NO DATA</div><div class="sub">No NetFlow records were received for ${esc(m.window.date)}</div>
-<div class="exp">${esc(m.observations[0])}<br>Utilisation and traffic figures are intentionally not shown: a day without data is not the same as a day with zero traffic. This is expected in environments where no router exports flows.</div></div>
+<div class="exp">Traffic figures are intentionally not shown: a day without data is not the same as a day with zero traffic.<br>This is expected in environments where no router exports flows.</div></div>
 <div class="kpis" style="grid-template-columns:repeat(4,1fr)">
 ${kpi({ cls: 'nodata', label: 'Data coverage', value: '0%', sub: `0 of ${cov.expected} five-minute intervals` })}
 ${kpi({ cls: 'nodata', label: 'Newest flow record on file', value: cov.lastSampleMs ? fmtAge(cov.freshnessS) : 'None', sub: esc(last) })}

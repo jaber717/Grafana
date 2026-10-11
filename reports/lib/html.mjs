@@ -41,7 +41,7 @@ html,body{margin:0;padding:0;background:#fff;color:var(--ink);font:400 8.6pt/1.3
 .kpi .s{font-size:7.4pt;color:var(--mut);margin-top:1.2mm;line-height:1.35;min-height:8.4mm}
 .chg{display:inline-block;font-weight:500;color:var(--ink);background:#EDF0F4;border-radius:1mm;padding:0 1.3mm;margin-left:.5mm;font-size:7.2pt}
 .card{background:var(--card);border:.25mm solid var(--line);border-radius:2mm;min-width:0;min-height:0;position:relative;overflow:hidden}
-.card>img{display:block;width:100%;height:100%;object-fit:contain}
+.card img{display:block;width:100%;height:100%;object-fit:contain}
 .card h3,.sec h3{margin:0;font-size:8.6pt;font-weight:500;letter-spacing:.01em;color:var(--ink)}
 .card .ch{padding:2.6mm 3.4mm 1.4mm;display:flex;justify-content:space-between;align-items:baseline}
 .card .ch span{font-size:7pt;color:var(--mut)}
@@ -58,7 +58,7 @@ table.t tr:nth-child(even) td{background:#F8F9FB}
 table.t .r{text-align:right}
 table.t td.n{color:var(--faint);width:5mm}
 .bar{display:inline-block;height:1.6mm;border-radius:.8mm;background:var(--in);vertical-align:middle;opacity:.85}
-.gauge{display:inline-block;width:20mm;height:1.9mm;border-radius:1mm;background:#E8ECF1;vertical-align:middle;position:relative;overflow:hidden}
+.gauge{display:inline-block;width:14mm;height:1.9mm;border-radius:1mm;background:#E8ECF1;vertical-align:middle;position:relative;overflow:hidden}
 .gauge i{position:absolute;left:0;top:0;bottom:0;border-radius:1mm}
 .st{display:inline-block;border-radius:1mm;padding:.1mm 1.5mm;font-size:6.4pt;font-weight:500;letter-spacing:.05em}
 .st.COMPLETE{background:#DDF3E7;color:#1E6B45}.st.PARTIAL{background:#FCEBC8;color:#8A5A00}.st.NO_DATA{background:#E7EAEE;color:#44505E}.st.ok{background:#DDF3E7;color:#1E6B45}.st.warn{background:#FCEBC8;color:#8A5A00}.st.crit{background:#F8D9D9;color:#8E2020}

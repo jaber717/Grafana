@@ -37,7 +37,10 @@ export function buildNetflowModel({ win, rows, nowMs = Date.now(), demo = false 
   const inB = num(t.InboundBytes);
   const outB = num(t.OutboundBytes);
   const prev = rows.totals_prev?.[0] || {};
-  const prevOk = num(prev.Buckets) > 0 && (num(prev.InboundBytes) + num(prev.OutboundBytes)) > 0;
+  const prevHasData = num(prev.Buckets) > 0 && (num(prev.InboundBytes) + num(prev.OutboundBytes)) > 0;
+  // a day with gaps is not comparable with a complete day: no percentage is shown, and the report says why
+  const comparable = status === 'COMPLETE';
+  const prevOk = prevHasData && comparable;
   const trend = rows.trend || [];
   const pin = peakOf(trend, 'Inbound');
   const pout = peakOf(trend, 'Outbound');
@@ -50,7 +53,7 @@ export function buildNetflowModel({ win, rows, nowMs = Date.now(), demo = false 
     change: prevOk
       ? { inbound: changePct(inB, num(prev.InboundBytes)), outbound: changePct(outB, num(prev.OutboundBytes)), total: changePct(inB + outB, num(prev.InboundBytes) + num(prev.OutboundBytes)) }
       : { inbound: null, outbound: null, total: null },
-    previousAvailable: prevOk,
+    previousAvailable: prevOk, comparisonSuppressed: prevHasData && !comparable,
   };
   const topTotal = (list) => list.reduce((s, r) => s + num(r.Bytes), 0);
   const withShare = (list, total) => list.map((r) => ({ ...r, Bytes: num(r.Bytes), Share: share(num(r.Bytes), total) }));
@@ -70,6 +73,7 @@ export function buildNetflowModel({ win, rows, nowMs = Date.now(), demo = false 
   model.observations.push(`Inbound ${fmtBytes(inB)} and outbound ${fmtBytes(outB)} (${k.sampled ? 'estimated from sampled flows' : 'observed volume'}); average ${fmtBps(k.avgInBps)} in and ${fmtBps(k.avgOutBps)} out.`);
   if (pin) model.observations.push(`Inbound peaked at ${fmtBps(pin.bps)} at ${fmtClock(pin.at)}${pout ? `; outbound peaked at ${fmtBps(pout.bps)} at ${fmtClock(pout.at)}` : ''} (5-minute averages, Asia/Riyadh).`);
   if (k.previousAvailable) model.observations.push(`Total volume ${fmtChange(k.change.total)} against the previous day (inbound ${fmtChange(k.change.inbound)}, outbound ${fmtChange(k.change.outbound)}).`);
+  else if (k.comparisonSuppressed) model.observations.push(`Previous-day comparison is not shown: this day is incomplete (coverage ${fmtPct(cov.coverage * 100, 0)}), so it is not comparable with a full day.`);
   else model.observations.push('No previous-day data is available, so no comparison is shown.');
   const ts = model.tables.top_src[0];
   if (ts) model.observations.push(`Largest source: ${ts.IP} with ${fmtPct(ts.Share)} of inbound plus outbound volume.`);
