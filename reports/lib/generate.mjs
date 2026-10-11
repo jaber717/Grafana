@@ -93,12 +93,18 @@ export async function generateOne(kind, ctx) {
   mkdirSync(dayDir, { recursive: true });
   const filename = `${demo ? 'DEMO-' : ''}${FILENAME[kind](win.date)}`;
   const tmp = join(dayDir, `.${filename}.tmp`);
-  const info = await retrying(() => htmlToPdf(html, tmp, { chromium: settings.chromiumCmd, expectedPages: pages, keepHtml: demo?.keepHtml ? join(dayDir, `${filename}.html`) : null }), { ...rt, attempts: 2, baseMs: 3000, what: `pdf ${kind}` });
+  const info = await retrying(() => htmlToPdf(html, tmp, { chromium: settings.chromiumCmd, expectedPages: pages, keepHtml: (demo?.keepHtml || ctx.keepHtml) ? join(dayDir, `${filename}.html`) : null }), { ...rt, attempts: 2, baseMs: 3000, what: `pdf ${kind}` });
   const path = join(dayDir, filename);
   renameSync(tmp, path);
   const data = readFileSync(path);
+  writeFileSync(join(dayDir, `${demo ? 'DEMO-' : ''}${kind}.model.json`), JSON.stringify(slimModel(model)) + '\n');
   log({ event: 'report-generated', kind, status: model.status, file: filename, pages: info.pages, bytes: info.bytes });
   return { kind, model, file: { filename, path, bytes: data.length, sha256: sha256(data), pages: info.pages } };
+}
+
+// The model without per-sample arrays: enough to rebuild delivery messages later (grafana-report deliver) without regenerating.
+export function slimModel(model) {
+  return JSON.parse(JSON.stringify(model, (k, v) => (k === 'inSamples' || k === 'outSamples' ? undefined : v)));
 }
 
 export function pruneOutput(outDir, keepDays, nowMs, log = () => {}) {
@@ -143,7 +149,7 @@ async function notifyFailure({ settings, win, error, log, deps }) {
 
 // ---- the daily run -----------------------------------------------------------------------------------------------------------------
 // exit codes: 0 ok, 2 generation failed, 3 delivery failed or partial
-export async function runDaily({ settings, now = Date.now(), date = null, kinds = null, force = false, noDeliver = false, demo = null, log = () => {}, deps = {} }) {
+export async function runDaily({ settings, now = Date.now(), date = null, kinds = null, force = false, noDeliver = false, demo = null, keepHtml = false, log = () => {}, deps = {} }) {
   const win = date ? windowForDate(date) : previousDayWindow(now);
   const prevWin = windowForDate(new Date(win.startMs - 86400e3 + 3 * 3600e3).toISOString().slice(0, 10));
   const g = deps.grafana || new Grafana({ url: settings.grafana.url, token: settings.grafana.token });
@@ -151,7 +157,7 @@ export async function runDaily({ settings, now = Date.now(), date = null, kinds 
   log({ event: 'run-start', date: win.date, kinds: selected, demo: !!demo, force });
   const results = [];
   try {
-    for (const k of selected) results.push(await generateOne(k, { g, win, prevWin, nowMs: now, settings, outDir: settings.outputDir, demo, log, deps }));
+    for (const k of selected) results.push(await generateOne(k, { g, win, prevWin, nowMs: now, settings, outDir: settings.outputDir, demo, keepHtml, log, deps }));
   } catch (e) {
     log({ event: 'generation-failed', error: e.message });
     try { await notifyFailure({ settings, win, error: e, log, deps }); } catch (n) { log({ event: 'failure-notice-failed', error: n.message }); }

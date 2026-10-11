@@ -2,7 +2,7 @@
 import { spawn } from 'node:child_process';
 import { writeFileSync, mkdtempSync, rmSync, mkdirSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 function run(bin, args, timeoutMs) {
   return new Promise((resolve, reject) => {
@@ -23,7 +23,7 @@ export async function previewPages(html, outDir, { chromium, pages, prefix = 'pa
     for (let n = 1; n <= pages; n++) {
       const file = join(dir, `p${n}.html`);
       writeFileSync(file, html.replace('</head>', `<style>.page{display:none!important}.page:nth-of-type(${n}){display:flex!important}</style></head>`));
-      const out = join(outDir, `${prefix}-${n}.png`);
+      const out = resolve(outDir, `${prefix}-${n}.png`);          // Chromium resolves a relative path against its own cwd
       await run(chromium, ['--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars', `--force-device-scale-factor=${scale}`, '--window-size=1123,794', '--virtual-time-budget=4000', `--user-data-dir=${join(dir, 'u' + n)}`, `--screenshot=${out}`, 'file:///' + file.replace(/\\/g, '/').replace(/^\/+/, '')], 60000);
       if (!existsSync(out)) throw new Error(`no screenshot for page ${n}`);
       files.push(out);
