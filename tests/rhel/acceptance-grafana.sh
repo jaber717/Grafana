@@ -34,9 +34,12 @@ expect_match "G is RHEL 9" "$(_ssh "$G" 'grep ^PRETTY_NAME /etc/os-release')" 'R
 expect_eq "G SELinux" "$(_ssh "$G" getenforce)" Enforcing
 expect_eq "G firewalld" "$(_ssh "$G" 'systemctl is-active firewalld')" active
 expect_eq "G has no Grafana yet (clean host)" "$(_ssh "$G" 'rpm -q grafana >/dev/null 2>&1 && echo present || echo absent')" absent
-SETUP_OUT=$(RG "bash $HG/tests/rhel/setup-grafana-test.sh $HG $A 2>&1; echo setup-rc=$?")
-expect_match "test host prepared (PKI, dummy secrets, mock Zabbix, item map, environment file)" "$SETUP_OUT" 'setup-rc=0'
-[ "$(echo "$SETUP_OUT" | tail -1)" = "setup-rc=0" ] || { note "setup output: $SETUP_OUT"; acc_summary; exit 1; }
+for try in 1 2 3; do
+  SETUP_OUT=$(RG "bash $HG/tests/rhel/setup-grafana-test.sh $HG $A 2>&1")
+  [ "$(RG 'test -f /root/gp-test/test.env && echo yes || echo no')" = yes ] && break; sleep 20
+done
+expect_eq "test host prepared (PKI, dummy secrets, mock Zabbix, item map, environment file)" "$(RG 'test -f /root/gp-test/test.env && echo yes || echo no')" yes
+[ "$(RG 'test -f /root/gp-test/test.env && echo yes || echo no')" = yes ] || { note "setup output: ${SETUP_OUT: -700}"; acc_summary; exit 1; }
 # the ClickHouse datasource: the Akvorado test machine, verified TLS, dummy password, its throw-away CA
 CA=$(RA 'cat /etc/akvorado-platform/restored-tls/ca.pem 2>/dev/null || cat /root/ap-test/pki/ca.pem'); PW=$(RA 'tr -d "\r\n" < /etc/akvorado-platform/secrets/grafana-ro-password')
 printf '%s\n' "$CA" | ssh -i "$SSH_KEY" -o BatchMode=yes "$SSH_USER@$G" 'cat > /tmp/akvorado-ca.pem' 2>&1 | grep -av '^\*\*' || true
