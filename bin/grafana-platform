@@ -9,6 +9,7 @@
 #   grafana-platform restore    <archive> [--yes]         restore an archive (saves the current state first)
 #   grafana-platform upgrade    [--yes]                   move to the Grafana version pinned in this release (backup first, auto-rollback)
 #   grafana-platform rollback   [<archive>] [--yes]       return to the state saved by the last upgrade
+#   grafana-platform rotate-secrets                       push changed zabbix-password / clickhouse-password files into the datasources
 #   grafana-platform version
 #
 # Run as root. The release (this directory) is copied to /opt/grafana-platform/releases/<version> by `install`, and this command is linked
@@ -40,7 +41,8 @@ case "$cmd" in
   restore)   parse_common_args "$@"; cmd_restore ;;
   upgrade)   parse_common_args "$@"; cmd_upgrade ;;
   rollback)  parse_common_args "$@"; cmd_rollback ;;
+  rotate-secrets) parse_common_args "$@"; cmd_rotate_secrets ;;
   version)   echo "grafana-platform $(cat "$RELEASE_DIR/VERSION") (Grafana $GRAFANA_VERSION, plugins: $(awk '!/^#/ && NF {printf "%s@%s ", $1, $2}' "$RELEASE_DIR/plugins/plugins.txt"))" ;;
-  ""|-h|--help|help) sed -n '2,19p' "$SELF" ;;
+  ""|-h|--help|help) sed -n '2,20p' "$SELF" ;;
   *) echo "unknown command: $cmd (try --help)" >&2; exit 2 ;;
 esac

@@ -15,9 +15,9 @@ Two layers: the **host** (Grafana package + plugins, inside the container) and t
 ```bash
 # 1. inside the container, as root
 git clone https://github.com/jaber717/Grafana.git /opt/grafana-repo && cd /opt/grafana-repo && git checkout v1.0.0
-scripts/install-lxc.sh --dry-run          # prints every action
-scripts/install-lxc.sh                    # Grafana 13.2.3 (held), pinned plugins, service enabled and healthy
-scripts/verify-lxc.sh                     # host checks (read-only)
+lab/scripts/install-lxc.sh --dry-run          # prints every action
+lab/scripts/install-lxc.sh                    # Grafana 13.2.3 (held), pinned plugins, service enabled and healthy
+lab/scripts/verify-lxc.sh                     # host checks (read-only)
 
 # 2. on first start set the admin password through Grafana (UI first-login prompt or `grafana cli admin reset-admin-password`)
 
@@ -29,7 +29,7 @@ scripts/apply.sh                          # folders, datasources, 7 dashboards, 
 scripts/verify.sh                         # expect: VERIFY: PASS
 ```
 
-`scripts/install-lxc.sh --provisioning` is the alternative for a clean instance that should be configured by files (see [provisioning-mode.md](provisioning-mode.md)); do not combine it with `apply.sh`.
+`lab/scripts/install-lxc.sh --provisioning` is the alternative for a clean instance that should be configured by files (see [provisioning-mode.md](provisioning-mode.md)); do not combine it with `apply.sh`.
 
 ## Existing grafana-01
 

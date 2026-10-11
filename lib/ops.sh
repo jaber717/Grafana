@@ -77,7 +77,7 @@ verify_all() {
 
   step "Operations"
   local last; last=$(ls -1t "$BACKUP_DIR"/grafana-platform-*.tar.gz* 2>/dev/null | head -1 || true)
-  if [ -n "$last" ]; then [ $(( $(date +%s) - $(stat -c %Y "$last") )) -lt $((8*86400)) ] && pass "latest backup $(basename "$last")" || warn "latest backup is older than 8 days ($(basename "$last"))"; else warn "no backup exists yet in $BACKUP_DIR"; fi
+  if [ -n "$last" ]; then [ $(( $(date +%s) - $(stat -c %Y "$last") )) -lt $((3*86400)) ] && pass "latest backup $(basename "$last")" || warn "latest backup is older than 3 days ($(basename "$last"))"; else warn "no backup exists yet in $BACKUP_DIR"; fi
   local errs; errs=$(journalctl -u grafana-server -p err --since "-30min" --no-pager -q 2>/dev/null | grep -vc '^$' || true)
   [ "${errs:-0}" -le 3 ] && pass "journal: $errs error line(s) in the last 30 min" || warn "journal: $errs error lines in the last 30 min (journalctl -u grafana-server -p err)"
 }
@@ -109,6 +109,8 @@ make_backup() { # $1 label
   cp -a /etc/sysconfig/grafana-server "$stage/etc-grafana/sysconfig-grafana-server" 2>/dev/null || true
   cp -a "$ENV_INSTALLED" "$RELEASE_JSON" "$stage/etc-platform/" 2>/dev/null || true
   [ -f "$ZABBIX_ITEM_MAP_FILE" ] && cp -a "$ZABBIX_ITEM_MAP_FILE" "$stage/etc-platform/zabbix-item-map.json"
+  mkdir -p "$stage/etc-platform/ca"; local cav   # public CA certificates named in the environment file: needed to rebuild trust on a new host
+  for cav in ZABBIX_CA_FILE CLICKHOUSE_CA_FILE GRAFANA_TLS_CA_FILE; do [ -n "${!cav:-}" ] && [ -r "${!cav}" ] && cp "${!cav}" "$stage/etc-platform/ca/$cav.pem"; done
   if [ "$with_secrets" = 1 ]; then mkdir -p "$stage/secrets"; cp -a "$SECRETS_DIR/." "$stage/secrets/"; fi
   run_content_tool backup --out "$stage/content" >/dev/null 2>&1 || warn "content export (API) failed; the database copy is still complete"
   local sk; sk=$(sha256sum "$SECRETS_DIR/secret-key" | cut -d' ' -f1)
@@ -122,13 +124,17 @@ make_backup() { # $1 label
     pkill -x gpg-agent 2>/dev/null || true
   fi
   chmod 600 "$out"; rm -rf "$work"; BACKUP_LAST=$out
-  ls -1t "$BACKUP_DIR"/grafana-platform-*.tar.gz* 2>/dev/null | grep -v 'pre-' | tail -n +$((BACKUP_KEEP + 1)) | while read -r f; do rm -f "$f"; done
+  # retention: the newest BACKUP_KEEP regular archives and the newest 5 safety (pre-*) archives are kept
+  local old f
+  for old in "-(manual|scheduled)\.tar\.gz(\.gpg)?$:$BACKUP_KEEP" "-pre-[a-z]+\.tar\.gz(\.gpg)?$:5"; do
+    for f in $( { ls -1t "$BACKUP_DIR"/grafana-platform-*.tar.gz* 2>/dev/null | grep -E -e "${old%:*}" | tail -n +$(( ${old##*:} + 1 )); } || true); do rm -f "$f"; done
+  done
 }
 
 cmd_backup() {
   require_root; load_env; log_to_file backup
   [ -f "$RELEASE_JSON" ] || die "not a managed installation"
-  make_backup manual
+  make_backup "$([ -n "${INVOCATION_ID:-}" ] && echo scheduled || echo manual)"
   pass "backup written: $BACKUP_LAST ($(stat -c %s "$BACKUP_LAST") bytes)"
   if [ -n "${BACKUP_GPG_PASSPHRASE_FILE:-}" ]; then pass "encrypted (AES256) and includes the secrets needed for recovery"
   elif [ "$OPT_INCLUDE_SECRETS" = 1 ]; then warn "archive is NOT encrypted but contains secrets: protect it like a credential"
@@ -151,14 +157,42 @@ prepare_archive() { # $1 archive -> sets RESTORE_DIR
   mkdir -p "$RESTORE_DIR/x"; tar -xzf "$plain" -C "$RESTORE_DIR/x" || die "archive cannot be extracted"
   [ "$plain" != "$a" ] && rm -f "$plain"
   (cd "$RESTORE_DIR/x" && sed -n '/^--- sha256$/,$p' manifest.txt | tail -n +2 | sha256sum -c --quiet) || die "archive fails its SHA-256 manifest: refusing to restore"
-  [ "$(sqlite3 "$RESTORE_DIR/x/grafana.db" 'PRAGMA integrity_check;')" = ok ] || die "archived database fails its integrity check"
+  if [ "${SKIP_DB_CHECK:-0}" != 1 ]; then [ "$(sqlite3 "$RESTORE_DIR/x/grafana.db" 'PRAGMA integrity_check;')" = ok ] || die "archived database fails its integrity check"; fi
 }
 
 manifest_get() { sed -n "s/^$1=//p" "$RESTORE_DIR/x/manifest.txt" | head -1; }
 
+restore_bootstrap() { # new, empty host: put platform.env, secrets, item map, CA and TLS material from a backup (made with --include-secrets) back in place
+  SKIP_DB_CHECK=1 prepare_archive "$1"
+  [ "$(manifest_get secrets_included)" = 1 ] || die "this archive was made without --include-secrets: there are no secrets to bootstrap from; create $ETC/platform.env and $SECRETS_DIR yourself (docs/BACKUP-RESTORE.md)"
+  local x="$RESTORE_DIR/x" v cur
+  install -d -m 0755 "$ETC"; install -d -m 0700 "$ETC/secrets"
+  cp -a "$x/secrets/." "$ETC/secrets/"; chmod 600 "$ETC"/secrets/*
+  [ -f "$x/etc-platform/zabbix-item-map.json" ] && install -m 0640 "$x/etc-platform/zabbix-item-map.json" "$ETC/zabbix-item-map.json"
+  install -d -m 0700 "$ETC/restored"
+  [ -f "$x/etc-grafana/tls/grafana.crt" ] && cp "$x/etc-grafana/tls/grafana.crt" "$ETC/restored/grafana.crt"
+  [ -f "$x/etc-grafana/tls/grafana.key" ] && cp "$x/etc-grafana/tls/grafana.key" "$ETC/restored/grafana.key" && chmod 600 "$ETC/restored/grafana.key"
+  for v in ZABBIX_CA_FILE CLICKHOUSE_CA_FILE GRAFANA_TLS_CA_FILE; do [ -f "$x/etc-platform/ca/$v.pem" ] && cp "$x/etc-platform/ca/$v.pem" "$ETC/restored/$v.pem"; done
+  install -m 0640 "$x/etc-platform/platform.env" "$ENV_INSTALLED"
+  sed -i "s#^ZABBIX_ITEM_MAP_FILE=.*#ZABBIX_ITEM_MAP_FILE=$ETC/zabbix-item-map.json#" "$ENV_INSTALLED"
+  # files named in the old environment file that do not exist on this host are replaced by the restored copies
+  for v in GRAFANA_TLS_CERT_FILE:grafana.crt GRAFANA_TLS_KEY_FILE:grafana.key ZABBIX_CA_FILE:ZABBIX_CA_FILE.pem CLICKHOUSE_CA_FILE:CLICKHOUSE_CA_FILE.pem GRAFANA_TLS_CA_FILE:GRAFANA_TLS_CA_FILE.pem; do
+    cur=$(sed -n "s/^${v%%:*}=//p" "$ENV_INSTALLED" | head -1)
+    if [ -n "$cur" ] && [ ! -r "$cur" ] && [ -f "$ETC/restored/${v##*:}" ]; then sed -i "s#^${v%%:*}=.*#${v%%:*}=$ETC/restored/${v##*:}#" "$ENV_INSTALLED"; info "${v%%:*} now points at $ETC/restored/${v##*:}"; fi
+  done
+  rm -rf "$RESTORE_DIR"
+  pass "platform.env, secrets, item map, CA and TLS material restored from $(basename "$1")"
+  info "next: grafana-platform install, then: grafana-platform restore $1 --yes"
+}
+
 cmd_restore() {
-  require_root; load_env; log_to_file restore
-  local a=${OPT_ARGS[0]:-}; [ -n "$a" ] || die "usage: grafana-platform restore <archive> [--yes]"
+  require_root; log_to_file restore
+  local a="" boot=0 x
+  for x in "${OPT_ARGS[@]}"; do case "$x" in --bootstrap) boot=1 ;; *) [ -z "$a" ] && a=$x ;; esac; done
+  [ -n "$a" ] || die "usage: grafana-platform restore <archive> [--yes] [--bootstrap]"
+  if [ "$boot" = 1 ]; then restore_bootstrap "$a"; return 0; fi
+  load_env
+  [ -f "$RELEASE_JSON" ] || die "no managed installation: run 'install' first, then restore. On a bare host with no environment file: restore <archive> --bootstrap first"
   prepare_archive "$a"
   local bpkg; bpkg=$(manifest_get grafana_package); local cur; cur=$(installed_version)
   info "archive: created $(manifest_get created), Grafana $bpkg, platform $(manifest_get platform_version), secrets_included=$(manifest_get secrets_included)"
@@ -293,4 +327,13 @@ cmd_rollback() {
   PASS_N=0; WARN_N=0; FAIL_N=0
   rollback_inner "$arch" "$from"
   summary "ROLLBACK"
+}
+
+# push the datasource passwords currently in the secret files into Grafana (after you changed zabbix-password / clickhouse-password)
+cmd_rotate_secrets() {
+  require_root; load_env; log_to_file rotate-secrets
+  [ -f "$RELEASE_JSON" ] || die "not a managed installation"
+  info "writing the passwords from $SECRETS_DIR/{zabbix,clickhouse}-password into the datasources"
+  run_content_tool apply --rotate-secrets --env-file "$ENV_FILE_USED" --item-map "$ZABBIX_ITEM_MAP_FILE" | grep -aE 'datasource|health|applied' || true
+  step "Verification"; verify_all; summary "ROTATE-SECRETS"
 }

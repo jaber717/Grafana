@@ -20,7 +20,7 @@ node tools/netflow/test-queries.mjs --quiet   # run every NetFlow panel query th
 | What | Command | Contains secrets? |
 |---|---|---|
 | Content as JSON (dashboards with versions, folders, datasource definitions, playlists, alerting objects, plugin list, users' logins) — workstation, API | `scripts/backup.sh --out backups --keep 10` | no (Grafana never returns datasource secrets) |
-| Whole instance state (database, `/etc/grafana`, `/etc/default/grafana-server`, drop-ins) — inside the container | `scripts/backup-lxc.sh` → `/var/backups/grafana-repo/grafana-lxc-<stamp>.tar.gz` (0600) | **yes** — keep off-host and protected |
+| Whole instance state (database, `/etc/grafana`, `/etc/default/grafana-server`, drop-ins) — inside the container | `lab/scripts/backup-lxc.sh` → `/var/backups/grafana-repo/grafana-lxc-<stamp>.tar.gz` (0600) | **yes** — keep off-host and protected |
 
 Take both before any upgrade (the upgrade script takes the LXC one itself). Schedule is yours; recommended: content backup after every dashboard change, LXC backup weekly.
 
@@ -28,7 +28,7 @@ Take both before any upgrade (the upgrade script takes the LXC one itself). Sche
 
 ```bash
 # inside the container, as root
-scripts/upgrade-lxc.sh 13.x.y            # refuses an unavailable/same version; backs up; installs; re-installs plugins; waits for health
+lab/scripts/upgrade-lxc.sh 13.x.y            # refuses an unavailable/same version; backs up; installs; re-installs plugins; waits for health
 # afterwards, from a workstation
 scripts/verify.sh
 # then update VERSIONS.env (+ plugins/plugins.txt), CHANGELOG.md, tag a release
@@ -41,8 +41,8 @@ Grafana migrates its database on first start of a new version. That migration is
 |---|---|
 | A dashboard change was wrong | In Grafana: Dashboard → Settings → Versions → restore. Or `scripts/restore.sh backups/grafana-<stamp>` (dry run) then `--apply` |
 | Content was damaged/deleted | `scripts/restore.sh backups/grafana-<stamp> --apply` (verifies the backup's SHA-256 manifest first; datasources are only reported — recreate with `scripts/apply.sh --datasource-only`) |
-| Upgrade went bad | inside the container: `scripts/rollback-lxc.sh` (uses `/var/backups/grafana-repo/last-upgrade`; saves the current state to `pre-rollback-<stamp>.tar.gz`, restores database + config, downgrades the package, restarts) |
-| Whole container lost | recreate the container, `scripts/install-lxc.sh`, restore `/var/lib/grafana/grafana.db` and `/etc/grafana` from a `backup-lxc.sh` archive (`scripts/rollback-lxc.sh <archive>` does exactly that), or `apply.sh` for content only |
+| Upgrade went bad | inside the container: `lab/scripts/rollback-lxc.sh` (uses `/var/backups/grafana-repo/last-upgrade`; saves the current state to `pre-rollback-<stamp>.tar.gz`, restores database + config, downgrades the package, restarts) |
+| Whole container lost | recreate the container, `lab/scripts/install-lxc.sh`, restore `/var/lib/grafana/grafana.db` and `/etc/grafana` from a `backup-lxc.sh` archive (`lab/scripts/rollback-lxc.sh <archive>` does exactly that), or `apply.sh` for content only |
 
 ## Rotating the datasource secrets
 

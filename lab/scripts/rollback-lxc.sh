@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# rollback-lxc.sh — return grafana-01 to the state saved by scripts/backup-lxc.sh / upgrade-lxc.sh (run INSIDE the container as root).
+# rollback-lxc.sh — return grafana-01 to the state saved by lab/scripts/backup-lxc.sh / upgrade-lxc.sh (run INSIDE the container as root).
 #
-#   scripts/rollback-lxc.sh [backup.tar.gz] [--yes]        default: the backup named in /var/backups/grafana-repo/last-upgrade
+#   lab/scripts/rollback-lxc.sh [backup.tar.gz] [--yes]        default: the backup named in /var/backups/grafana-repo/last-upgrade
 #
 # Stops Grafana, verifies the archive's SHA-256 manifest, saves the CURRENT database/config to
 # /var/backups/grafana-repo/pre-rollback-<stamp>.tar.gz (so a rollback is itself reversible), restores grafana.db, /etc/grafana,
 # /etc/default/grafana-server and the systemd drop-ins, downgrades the package to the version recorded in the manifest (if it differs),
 # starts Grafana and waits for /api/health. Plugins are re-installed from plugins/plugins.txt.
 set -euo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")/.."
+cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 [ "$(id -u)" -eq 0 ] || { echo "run as root" >&2; exit 1; }
 ARCH=""; YES=0
 for a in "$@"; do case "$a" in --yes) YES=1 ;; *) ARCH=$a ;; esac; done

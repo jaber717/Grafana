@@ -15,5 +15,5 @@
 | HTTP 401/403 from the scripts | the account is not an Admin or the token expired | datasource and folder writes need Admin; use a service-account token with Admin role |
 | `install-lxc.sh`: `LXC drop-in missing` | unprivileged LXC without the compatibility drop-in | copy `/etc/systemd/system/grafana-server.service.d/lxc.conf` from grafana-01 first (finding G3) |
 | `grafana-server` fails in an unprivileged LXC with namespace/sandbox errors | systemd sandboxing options not permitted | the drop-in above; journal: `journalctl -u grafana-server -b` |
-| After an upgrade Grafana is unhealthy | failed DB migration | `scripts/rollback-lxc.sh` |
+| After an upgrade Grafana is unhealthy | failed DB migration | `lab/scripts/rollback-lxc.sh` |
 | Scripts print `EPIPE` / garbled non-ASCII titles on Windows | piping to `head`/`grep -q`, or a non-UTF-8 console | capture output into a variable first; dashboard titles contain "—" (U+2014) — keep files UTF-8 |

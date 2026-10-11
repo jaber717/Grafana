@@ -2,12 +2,12 @@
 # Clean-room test of the API tooling against a THROW-AWAY Grafana (never production).
 #
 #   1. start an empty Grafana of the pinned version on 127.0.0.1:3999 with the pinned plugins (see docs/validation.md for how it was done)
-#   2. GRAFANA_URL=http://127.0.0.1:3999 GRAFANA_USER=admin GRAFANA_PASSWORD=<throw-away> tests/clean-room-local.sh
+#   2. GRAFANA_URL=http://127.0.0.1:3999 GRAFANA_USER=admin GRAFANA_PASSWORD=<throw-away> lab/tests/clean-room-local.sh
 #
 # Refuses to run against anything but a loopback URL. Datasource endpoints are rewritten to a dead loopback address
 # (APPLY_SANDBOX_ENDPOINTS=1) so the instance can never contact the real Zabbix or ClickHouse.
 set -uo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")/.."
+cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 case "${GRAFANA_URL:-}" in http://127.0.0.1:*|http://localhost:*) ;; *) echo "refusing: GRAFANA_URL must be a loopback URL" >&2; exit 2 ;; esac
 export APPLY_SANDBOX_ENDPOINTS=1 ZABBIX_GRAFANA_PASSWORD=test-only CLICKHOUSE_RO_PASSWORD=test-only
 PASS=0; FAIL=0

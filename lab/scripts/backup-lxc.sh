@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # backup-lxc.sh — consistent backup of the Grafana instance's STATE (run INSIDE grafana-01, as root).
 #
-#   scripts/backup-lxc.sh [--keep N]        (default keeps the newest 8)
+#   lab/scripts/backup-lxc.sh [--keep N]        (default keeps the newest 8)
 #
 # Archive /var/backups/grafana-repo/grafana-lxc-<stamp>.tar.gz (mode 0600) contains:
 #   grafana.db            consistent online copy (sqlite3 .backup) — dashboards, users, API keys, datasource definitions AND

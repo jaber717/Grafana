@@ -227,6 +227,16 @@ start_service() {
   wait_health 120 && pass "Grafana answers /api/health over $GRAFANA_PROTOCOL" || { journalctl -u grafana-server -n 25 --no-pager >&2; die "Grafana did not become healthy; see 'journalctl -u grafana-server'"; }
 }
 
+install_units() {
+  local u changed=0
+  for u in grafana-platform-backup.service grafana-platform-backup.timer; do
+    cmp -s "$RELEASE_DIR/systemd/$u" "/etc/systemd/system/$u" 2>/dev/null || { install -m 0644 "$RELEASE_DIR/systemd/$u" "/etc/systemd/system/$u"; changed=1; }
+  done
+  [ "$changed" = 1 ] && systemctl daemon-reload
+  systemctl enable --now grafana-platform-backup.timer >/dev/null 2>&1
+  pass "daily backup timer installed and enabled (grafana-platform-backup.timer)"
+}
+
 deploy_release() {
   local ver dest; ver=$(cat "$RELEASE_DIR/VERSION"); dest="$OPT/releases/$ver"
   install -d -m 0755 "$OPT/releases"
@@ -282,7 +292,7 @@ cmd_install() {
   step "Plugins"; install_plugins
   step "Network policy"; configure_firewall
   step "Service"; start_service
-  step "Release and content"; deploy_release; apply_content; write_release_json
+  step "Release and content"; deploy_release; install_units; apply_content; write_release_json
   step "Final verification"; PASS_N=0; WARN_N=0; FAIL_N=0; verify_all
   summary "INSTALL"
 }

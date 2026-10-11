@@ -53,7 +53,7 @@ BAD=$(files | grep -E '(^|/)(\.env|[^/]*\.(key|pem|p12|pfx|db|sqlite|log|tgz|zip
 BIG=$(files | while read -r f; do [ -f "$f" ] && [ "$(wc -c < "$f")" -gt 1048576 ] && echo "$f"; done)
 [ -z "$BIG" ] && ok "no file larger than 1 MiB" || bad "large file(s): $BIG"
 PAT='(password|passwd|secret|token|api[_-]?key)[A-Za-z_]*["'"'"']?[[:space:]]*[:=][[:space:]]*["'"'"']?[A-Za-z0-9+/=_.-]{12,}|BEGIN [A-Z ]*PRIVATE KEY|gh[pousr]_[A-Za-z0-9]{20,}|glsa_[A-Za-z0-9_]{20,}|eyJrIjoi|ssh-(rsa|ed25519) AAAA'
-HITS=$(files | grep -vE 'release-gate\.sh$' | xargs grep -InE "$PAT" 2>/dev/null | grep -vE '\$[A-Z_]+|\$\{|<[a-z-]+>' || true)
+HITS=$(files | grep -vE 'release-gate\.sh$' | xargs grep -InE "$PAT" 2>/dev/null | grep -vE '\$[A-Z_]+|\$\{|<[a-z-]+>|process.env' || true)
 [ -z "$HITS" ] && ok "no credential-like literal" || { bad "credential-like literal(s):"; echo "$HITS" | head -10; }
 
 echo "== 7-8. generated documents and generator"
@@ -65,6 +65,23 @@ else skip "inventory / generator (node missing)"; fi
 echo "== 9. version"
 V=$(cat VERSION 2>/dev/null || echo none)
 grep -qE "^## \[?${V//./\\.}\]?( |$)" CHANGELOG.md && ok "VERSION $V has a CHANGELOG entry" || bad "VERSION $V not found in CHANGELOG.md"
+
+echo "== 10. unit tests"
+if command -v node >/dev/null; then node --test tests/unit/*.test.mjs >/tmp/rg_unit 2>&1 && ok "unit tests pass ($(grep -E '^# pass' /tmp/rg_unit | tr -dc 0-9))" || { bad "unit tests failed"; tail -8 /tmp/rg_unit; }; else skip "unit tests (node missing)"; fi
+
+echo "== 11. production environment template and pins"
+if grep -qE '192\.168\.1\.|grafana-01|netflow-01|\.lab\b' env/production.env.example; then bad "env/production.env.example contains LAB addresses or names"; else ok "env/production.env.example has no LAB addresses"; fi
+if grep -qE '^[A-Z_]*(PASSWORD|SECRET|TOKEN)[A-Z_]*=.+' <(grep -v '^SECRETS_DIR=' env/production.env.example); then bad "env/production.env.example carries a secret-looking value"; else ok "env/production.env.example carries no secrets"; fi
+if command -v gpg >/dev/null; then
+  FPR=$(GNUPGHOME=$(mktemp -d) gpg --batch --quiet --show-keys --with-colons vendor/rpm/RPM-GPG-KEY-grafana 2>/dev/null | awk -F: '/^fpr/ {print $10; exit}')
+  PIN=$(sed -n 's/^GRAFANA_RPM_GPG_FPR=//p' VERSIONS.env)
+  if [ -n "$FPR" ] && [ "$FPR" = "$PIN" ]; then ok "vendored Grafana RPM key fingerprint equals the pin ($PIN)"; else bad "vendored key fingerprint '$FPR' != pin '$PIN'"; fi
+else skip "vendored key fingerprint (gpg missing)"; fi
+BADP=$(sed 's/#.*//' plugins/plugins.txt | awk 'NF && $3 !~ /^[0-9a-f]{64}$/ {print $1}')
+if [ -z "$BADP" ]; then ok "every plugin has a pinned SHA-256"; else bad "plugin(s) without a SHA-256 pin: $BADP"; fi
+if grep -qE '^GRAFANA_RPM_SHA256=[0-9a-f]{64}$' VERSIONS.env; then ok "Grafana RPM SHA-256 pinned"; else bad "GRAFANA_RPM_SHA256 missing in VERSIONS.env"; fi
+MISSING=""; for d in docs/PRODUCTION-RHEL97.md docs/BACKUP-RESTORE.md docs/OFFLINE.md docs/SECURITY-PRODUCTION.md docs/LAB-VS-PRODUCTION.md docs/ZABBIX-ITEM-MAP.md docs/GITHUB-ACCESS.md docs/VALIDATION-RHEL97.md; do [ -s "$d" ] || MISSING="$MISSING $d"; done
+if [ -z "$MISSING" ]; then ok "required documents present"; else bad "missing document(s):$MISSING"; fi
 
 echo; if [ "$FAIL" -eq 0 ]; then echo "RELEASE GATE: PASS ($SKIP skipped)"; else echo "RELEASE GATE: FAIL ($FAIL)"; fi
 [ "$FAIL" -eq 0 ]
