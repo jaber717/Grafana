@@ -78,7 +78,7 @@ expect_eq "7 dashboards with the original UIDs" "$(RG dash_uids)" "netflow-asn n
 expect_eq "2 folders" "$(RG folders)" "netflow noc"
 expect_eq "playlist" "$(RG playlists)" "NetFlow NOC Rotation"
 expect_eq "both datasources healthy (Zabbix mock + Akvorado ClickHouse over verified TLS)" "$(RG ds_status)" "zabbix-lab=OK netflow-clickhouse=OK "
-out=$(RG "cd $HG && GRAFANA_URL=\$B GRAFANA_USER=admin GRAFANA_PASSWORD=\$(cat /etc/grafana-platform/secrets/admin-password) GRAFANA_CONNECT_ADDR=127.0.0.1 GRAFANA_CA_FILE=/etc/pki/tls/certs/ca-bundle.crt node tools/panel-smoke.mjs | tail -1")
+out=$(RG "export PATH=/usr/local/bin:\$PATH; cd $HG && GRAFANA_URL=\$B GRAFANA_USER=admin GRAFANA_PASSWORD=\$(cat /etc/grafana-platform/secrets/admin-password) GRAFANA_CONNECT_ADDR=127.0.0.1 GRAFANA_CA_FILE=/etc/pki/tls/certs/ca-bundle.crt node tools/panel-smoke.mjs | tail -1")
 expect_match "every ClickHouse panel query of the NetFlow dashboards executes (panel smoke test)" "$out" 'panel-smoke: [0-9]+ PASS \([0-9]+ with no rows\), 0 FAIL'
 
 section "5. Network admission (allowed, denied, restored)"
