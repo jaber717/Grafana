@@ -67,7 +67,7 @@ export function netflowDashboard(source = 'live') {
   const cmpFc = baseTs('bps');
   cmpFc.defaults.custom.fillOpacity = 8;
   cmpFc.overrides = [
-    byName('Today', [{ id: 'color', value: fixed(PALETTE.inbound) }, { id: 'custom.fillOpacity', value: 18 }]),
+    byName('Report day', [{ id: 'color', value: fixed(PALETTE.inbound) }, { id: 'custom.fillOpacity', value: 18 }]),
     byName('Previous day', [{ id: 'color', value: fixed(PALETTE.prev) }, { id: 'custom.lineStyle', value: { fill: 'dash', dash: [8, 6] } }, { id: 'custom.fillOpacity', value: 0 }, { id: 'custom.lineWidth', value: 1.5 }]),
   ];
   const hourFc = baseTs('decbytes', { drawStyle: 'bars', fillOpacity: 88, lineWidth: 0, gradientMode: 'none', barAlignment: 1, stacking: { mode: 'normal', group: 'A' } });
@@ -78,11 +78,11 @@ export function netflowDashboard(source = 'live') {
 
   const panels = [
     panel(1, 'Traffic by direction - 5-minute average', 'timeseries', 24, 10, 0, trendFc, tsOptions(), T('trend', ['Inbound', 'Outbound'])),
-    panel(2, 'Today vs previous day', 'timeseries', 12, 9, 10, cmpFc, tsOptions(),
-      demo ? [...demoSeries(demo.trend_total, ['Today']), { ...demoSeries(demo.trend_prev, ['Previous day'])[0], refId: 'B' }] : chTargets(['trend_total', 'trend_prev'])),
+    panel(2, 'Report day vs previous day', 'timeseries', 12, 9, 10, cmpFc, tsOptions(),
+      demo ? [...demoSeries(demo.trend_total, ['Report day']), { ...demoSeries(demo.trend_prev, ['Previous day'])[0], refId: 'B' }] : chTargets(['trend_total', 'trend_prev'])),
     panel(3, 'Hourly volume', 'timeseries', 12, 9, 10, hourFc, tsOptions(), T('hourly', ['Inbound', 'Outbound'])),
     panel(4, 'Protocol mix (volume)', 'piechart', 8, 9, 19, pieFc,
-      { pieType: 'donut', displayLabels: [], legend: { showLegend: true, displayMode: 'table', placement: 'right', values: ['percent'] }, reduceOptions: { values: true, calcs: [], fields: '/^Bytes$/' }, tooltip: { mode: 'single' } },
+      { pieType: 'donut', displayLabels: [], legend: { showLegend: true, displayMode: 'list', placement: 'bottom', values: ['percent'] }, reduceOptions: { values: true, calcs: [], fields: '/^Bytes$/' }, tooltip: { mode: 'single' } },
       demo ? demoTable(demo.protocols, ['Protocol', 'Bytes']) : chTargets(['protocols']), { transformations: [] }),
     panel(5, 'Traffic by site', 'barchart', 8, 9, 19, barFc, barOpts('Site'), demo ? demoTable(demo.by_site, ['Site', 'InboundBytes', 'OutboundBytes']) : chTargets(['by_site'])),
     panel(6, 'Traffic by ISP / provider', 'barchart', 8, 9, 19, barFc, barOpts('Provider'), demo ? demoTable(demo.by_isp, ['Provider', 'InboundBytes', 'OutboundBytes']) : chTargets(['by_isp'])),

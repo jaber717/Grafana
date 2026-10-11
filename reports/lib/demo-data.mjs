@@ -43,7 +43,7 @@ export function netflowFixture(win, { scenario = 'normal' } = {}) {
     totals: [{ InboundBytes: inB, OutboundBytes: outB, TransitBytes: pct(0.012), UnclassifiedBytes: pct(0.004), MaxSamplingRate: 1000, Buckets: observed, Exporters: 3, LastFlow: lastFlow }],
     totals_prev: [{ InboundBytes: bytesOf(inP), OutboundBytes: bytesOf(outP), Buckets: N }],
     trend,
-    trend_total: trend.map((r) => ({ time: r.time, Today: r.Inbound == null ? null : r.Inbound + r.Outbound })),
+    trend_total: trend.map((r) => ({ time: r.time, 'Report day': r.Inbound == null ? null : r.Inbound + r.Outbound })),
     trend_prev: inP.map((v, k) => ({ time: win.startMs + k * BUCKET_S * 1000, 'Previous day': v + outP[k] })),
     hourly,
     protocols: [{ Protocol: 'TCP', Bytes: pct(0.712) }, { Protocol: 'UDP', Bytes: pct(0.241) }, { Protocol: 'ICMP', Bytes: pct(0.011) }, { Protocol: 'Other', Bytes: pct(0.036) }],

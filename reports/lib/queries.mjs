@@ -22,8 +22,8 @@ export const NETFLOW_QUERIES = {
     sql: `SELECT toStartOfInterval(TimeReceived, INTERVAL 5 MINUTE) AS time, sumIf(Bytes * SamplingRate, ${DIR} = 'inbound') * 8 / 300 AS Inbound, sumIf(Bytes * SamplingRate, ${DIR} = 'outbound') * 8 / 300 AS Outbound FROM default.flows_5m0s WHERE ${win()} GROUP BY time ORDER BY time`,
   },
   trend_total: {
-    title: 'Day total (inbound + outbound)',
-    sql: `SELECT toStartOfInterval(TimeReceived, INTERVAL 5 MINUTE) AS time, sumIf(Bytes * SamplingRate, ${DIR} IN ('inbound', 'outbound')) * 8 / 300 AS Today FROM default.flows_5m0s WHERE ${win()} GROUP BY time ORDER BY time`,
+    title: 'Report day total (inbound + outbound)',
+    sql: `SELECT toStartOfInterval(TimeReceived, INTERVAL 5 MINUTE) AS time, sumIf(Bytes * SamplingRate, ${DIR} IN ('inbound', 'outbound')) * 8 / 300 AS `Report day` FROM default.flows_5m0s WHERE ${win()} GROUP BY time ORDER BY time`,
   },
   trend_prev: {
     title: 'Previous day (shifted by 24 h)',

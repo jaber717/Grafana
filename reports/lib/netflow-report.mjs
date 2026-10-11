@@ -28,6 +28,7 @@ export function buildNetflowModel({ win, rows, nowMs = Date.now(), demo = false 
   const rawExpired = win.startMs < nowMs - RAW_RETENTION_DAYS * 86400e3;
   model.notes.push('Volumes are derived from NetFlow records scaled by the exporter sampling rate: sampled exporters give ESTIMATED traffic, unsampled exporters give observed volume.');
   model.notes.push('Direction comes from interface boundary metadata (external to internal = inbound). Transit and unclassified flows are not part of inbound or outbound.');
+  model.notes.push('Top-10 shares are relative to inbound plus outbound volume; per-IP and per-service tables use flow records classified as inbound or outbound only.');
   model.notes.push('Exporters are listed separately and are not added together; a flow seen by two exporters appears in each exporter row.');
   if (status === 'NO_DATA') {
     model.observations.push('No NetFlow records were received for this reporting day. No traffic figures are shown, and absence of data is not reported as zero traffic.');
@@ -73,6 +74,7 @@ export function buildNetflowModel({ win, rows, nowMs = Date.now(), demo = false 
   const ts = model.tables.top_src[0];
   if (ts) model.observations.push(`Largest source: ${ts.IP} with ${fmtPct(ts.Share)} of inbound plus outbound volume.`);
   if (status === 'PARTIAL') model.observations.push(`Data coverage is ${fmtPct(cov.coverage * 100, 0)} (${cov.observed} of ${cov.expected} five-minute intervals): the volumes above understate real traffic.`);
+  if (k.sampled) model.observations.push(`Volumes are estimates: exporters sample 1 in ${num(t.MaxSamplingRate)} packets and each record is scaled by its sampling rate.`);
   if (rawExpired) model.notes.push(`Per-IP tables are not available: raw flow records are kept ${RAW_RETENTION_DAYS} days and this day is older.`);
   return model;
 }
