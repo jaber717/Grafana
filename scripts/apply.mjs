@@ -1,5 +1,6 @@
 // Idempotently applies this repository to an EXISTING Grafana through its HTTP API.
-//   node scripts/apply.mjs [--dry-run] [--datasource-only] [--rotate-secrets] [--skip-datasources] [--skip-dashboards] [--skip-playlists] [--allow-title-conflicts]
+//   node scripts/apply.mjs [--env-file F] [--item-map F] [--dry-run] [--datasource-only] [--rotate-secrets] [--skip-datasources] [--skip-dashboards] [--skip-playlists] [--allow-title-conflicts]
+//   --env-file  environment (KEY=VALUE; default env/lab.env.example)   --item-map  Zabbix item id map for the NOC dashboards (docs/ZABBIX-ITEM-MAP.md)
 //   --rotate-secrets  also pushes the password from the environment into a datasource whose definition is unchanged (secret rotation)
 //
 // Idempotent by construction: every object is compared with the live one first and written ONLY when it differs
@@ -12,9 +13,11 @@
 //   playlists    matched by name
 // Duplicates: a dashboard whose TITLE already exists in the target folder under a DIFFERENT uid is refused (it would show up twice)
 // unless --allow-title-conflicts is given.
-import { api, get, URL_, parseArgs, readJson, repoDashboards, repoPlugins, normalizeDashboard, canonical, dsComparable, ApiError, fail } from './lib/grafana.mjs';
+import { api, get, URL_, parseArgs, readJson, repoPlugins, normalizeDashboard, canonical, dsComparable, ApiError, fail } from './lib/grafana.mjs';
+import { loadContext, effectiveDashboards } from './lib/content.mjs';
 
 const args = parseArgs(process.argv.slice(2));
+const CTX = loadContext(args);
 const DRY = !!args['dry-run'];
 const SECRET_ENV = { 'zabbix-lab': 'ZABBIX_GRAFANA_PASSWORD', 'netflow-clickhouse': 'CLICKHOUSE_RO_PASSWORD' };
 const SECRET_KEY = { 'zabbix-lab': 'password', 'netflow-clickhouse': 'password' };
@@ -24,8 +27,8 @@ const SECRET_KEY = { 'zabbix-lab': 'password', 'netflow-clickhouse': 'password' 
 const SANDBOX = process.env.APPLY_SANDBOX_ENDPOINTS === '1';
 if (SANDBOX && !new RegExp('^https?://(127\\.0\\.0\\.1|localhost|\\[::1\\])(:|/|$)').test(URL_)) fail('APPLY_SANDBOX_ENDPOINTS=1 is only allowed against a loopback GRAFANA_URL', 2);
 const sandbox = (d) => (SANDBOX ? { ...d, url: d.url ? 'http://127.0.0.1:9/' : d.url, jsonData: { ...d.jsonData, ...(d.jsonData.host ? { host: '127.0.0.1' } : {}) } } : d);
-const tally = { created: 0, updated: 0, unchanged: 0, refused: 0 };
-const say = (kind, what) => { console.log(`${kind.padEnd(9)} ${what}`); if (kind === 'created' || kind === 'updated' || kind === 'unchanged' || kind === 'refused') tally[kind]++; };
+const tally = { created: 0, updated: 0, unchanged: 0, refused: 0, skipped: 0 };
+const say = (kind, what) => { console.log(`${kind.padEnd(9)} ${what}`); if (kind in tally) tally[kind]++; };
 const act = async (fn) => { if (!DRY) await fn(); };
 
 const health = await get('/api/health').catch((e) => fail(`Grafana is not reachable at ${URL_}: ${e.message}`));
@@ -53,7 +56,7 @@ if (!args['skip-dashboards'] && !args['datasource-only']) {
 
 // ---- datasources -----------------------------------------------------------------------------------------------
 if (!args['skip-datasources']) {
-  for (const want of readJson('config/datasources.json').map(sandbox)) {
+  for (const want of CTX.datasources.map(sandbox)) {
     const cur = await get(`/api/datasources/uid/${want.uid}`, { allow404: true });
     const envName = SECRET_ENV[want.uid];
     const secret = envName ? process.env[envName] : undefined;
@@ -80,7 +83,8 @@ if (args['datasource-only']) { summary(); process.exit(tally.refused ? 3 : 0); }
 // ---- dashboards ------------------------------------------------------------------------------------------------
 if (!args['skip-dashboards']) {
   const known = new Set(folders.map((f) => f.uid));
-  for (const { file, folderDir, dashboard } of repoDashboards()) {
+  for (const { file, folderDir, dashboard, state, reason } of effectiveDashboards(CTX)) {
+    if (state !== 'ok') { say(state, `${file}: ${reason}`); continue; }
     if (!known.has(folderDir)) { say('refused', `${file}: directory "${folderDir}" is not a folder in config/folders.json`); continue; }
     const want = normalizeDashboard(dashboard);
     const cur = await get(`/api/dashboards/uid/${dashboard.uid}`, { allow404: true });
@@ -113,6 +117,6 @@ summary();
 process.exit(tally.refused ? 3 : 0);
 
 function summary() {
-  console.log(`\n${DRY ? 'would apply' : 'applied'}: ${tally.created} created, ${tally.updated} updated, ${tally.unchanged} unchanged, ${tally.refused} refused`);
+  console.log(`\n${DRY ? 'would apply' : 'applied'}: ${tally.created} created, ${tally.updated} updated, ${tally.unchanged} unchanged, ${tally.refused} refused${tally.skipped ? `, ${tally.skipped} skipped` : ''}`);
   if (tally.refused) console.log('Some objects were refused (see above); fix the cause and re-run. Exit code 3.');
 }

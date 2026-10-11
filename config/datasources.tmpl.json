@@ -1,0 +1,39 @@
+[
+  {
+    "uid": "netflow-clickhouse",
+    "name": "NetFlow ClickHouse",
+    "type": "grafana-clickhouse-datasource",
+    "access": "proxy",
+    "url": "",
+    "isDefault": false,
+    "basicAuth": false,
+    "jsonData": {
+      "defaultDatabase": "default",
+      "dialTimeout": "10",
+      "host": "@@CLICKHOUSE_HOST@@",
+      "port": "@@CLICKHOUSE_PORT:int@@",
+      "protocol": "http",
+      "queryTimeout": "30",
+      "secure": "@@CLICKHOUSE_SECURE:bool@@",
+      "username": "@@CLICKHOUSE_USER@@",
+      "validateSql": false
+    }
+  },
+  {
+    "uid": "zabbix-lab",
+    "name": "@@ZABBIX_DS_NAME@@",
+    "type": "alexanderzobnin-zabbix-datasource",
+    "access": "proxy",
+    "url": "@@ZABBIX_URL@@",
+    "isDefault": true,
+    "basicAuth": false,
+    "jsonData": {
+      "alerting": true,
+      "authType": "user and password",
+      "cacheTTL": "1h",
+      "tlsSkipVerify": "@@ZABBIX_TLS_SKIP_VERIFY:bool@@",
+      "trends": true,
+      "username": "@@ZABBIX_USER@@"
+    }
+  }
+]
