@@ -1,4 +1,4 @@
-# Security model — production (RHEL 9.7)
+# Security model — production (RHEL 9)
 
 ## Controls the platform sets up and then checks (`grafana-platform verify`)
 

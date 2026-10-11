@@ -7,7 +7,7 @@
 * Test instances must never use production endpoints: `lab/tests/clean-room-local.sh` and `apply.mjs` sandbox mode enforce loopback-only targets and dead datasource endpoints.
 * If a credential is exposed: rotate it at its source (Grafana admin, Zabbix `grafana-ro`, ClickHouse `grafana_ro` on netflow-01), then `scripts/apply.sh --datasource-only --rotate-secrets`. This repository never contained one.
 
-## Production (RHEL 9.7, release 1.0.1)
+## Production (RHEL 9, release 1.0.1)
 The production platform has its own, stricter model — signed and pinned packages, TLS, SELinux/firewalld checks, secrets in root-only files, source-restricted listener, encrypted-at-rest options for backups — and states its limits openly:
 see [docs/SECURITY-PRODUCTION.md](docs/SECURITY-PRODUCTION.md). The LAB statements above describe release 1.0.0 (grafana-01) and are unchanged. Report a suspected leak by rotating the credential at its source first
 (`grafana-platform rotate-secrets` pushes new datasource passwords); never rewrite Git history without a reviewed plan.

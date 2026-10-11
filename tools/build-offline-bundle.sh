@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Builds the OFFLINE installation bundle for grafana-platform: the pinned Grafana RPM, the pinned plugin archives and the pinned Node.js tarball,
-# next to this release, in ONE archive that can be carried to an isolated RHEL 9.7 server.
+# next to this release, in ONE archive that can be carried to an isolated RHEL 9 server.
 #
 #   tools/build-offline-bundle.sh [output-dir]        (needs: bash, curl, sha256sum, tar, gzip; Internet access)
 #

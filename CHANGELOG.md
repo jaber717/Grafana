@@ -2,7 +2,7 @@
 
 ## [1.0.1] - 2026-10-11
 
-RHEL 9.7 production platform. **No change to any dashboard, UID, datasource definition or plugin version** (a unit test proves the LAB environment renders the captured LAB datasources byte-for-byte).
+RHEL 9 production platform. **No change to any dashboard, UID, datasource definition or plugin version** (a unit test proves the LAB environment renders the captured LAB datasources byte-for-byte).
 
 ### Added
 * `bin/grafana-platform` (+ `lib/`): `preflight`, `install`, `verify`, `status`, `backup`, `restore` (incl. `--bootstrap` for bare-host recovery), `upgrade` (backup first, automatic rollback), `rollback`, `rotate-secrets`. Idempotent, PASS/WARN/FAIL.
@@ -17,7 +17,7 @@ RHEL 9.7 production platform. **No change to any dashboard, UID, datasource defi
 * `GRAFANA_VERSION_OVERRIDE`-aware version checks in `scripts/verify.mjs`.
 
 ### Known limitations
-See [docs/VALIDATION-RHEL97.md](docs/VALIDATION-RHEL97.md): accepted on RHEL 9.6 test machines, **RHEL 9.7 run pending**; Grafana is not SELinux-confined (no policy ships with RHEL); NOC panel *values* need a production Zabbix to be validated; release assets are not signed.
+See [docs/VALIDATION-RHEL9.md](docs/VALIDATION-RHEL9.md): accepted on RHEL 9.6 test machines, **RHEL 9 run pending**; Grafana is not SELinux-confined (no policy ships with RHEL); NOC panel *values* need a production Zabbix to be validated; release assets are not signed.
 
 ## [1.0.0] - 2026-10-10
 

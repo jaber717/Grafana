@@ -1,6 +1,6 @@
 # Validation record — release 1.0.0 (2026-10-10)
 
-> **RHEL 9.7 production platform (release 1.0.1):** the acceptance record is [VALIDATION-RHEL97.md](VALIDATION-RHEL97.md). This page is the LAB release 1.0.0 record and is kept as it was.
+> **RHEL 9 production platform (release 1.0.1):** the acceptance record is [VALIDATION-RHEL9.md](VALIDATION-RHEL9.md). This page is the LAB release 1.0.0 record and is kept as it was.
 
 Legend: **LIVE** = executed against grafana-01 (GET requests only), **SANDBOX** = executed against a throw-away Grafana on the workstation, **STATIC** = files only, **PENDING** = not executed.
 

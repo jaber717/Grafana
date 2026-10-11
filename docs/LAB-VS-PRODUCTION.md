@@ -2,9 +2,9 @@
 
 Same repository, same dashboards, same pinned Grafana and plugins. Two **environment files** (`env/lab.env.example`, `env/production.env.example`) hold every difference; secrets are files outside Git in both.
 
-| | LAB (grafana-01, release 1.0.0 — unchanged) | Production (RHEL 9.7, `grafana-platform`) |
+| | LAB (grafana-01, release 1.0.0 — unchanged) | Production (RHEL 9, `grafana-platform`) |
 |---|---|---|
-| Platform | Debian 12, unprivileged LXC on Proxmox | **RHEL 9.7**, virtual or physical, SELinux Enforcing, firewalld |
+| Platform | Debian 12, unprivileged LXC on Proxmox | **RHEL 9**, virtual or physical, SELinux Enforcing, firewalld |
 | Installer | `lab/scripts/install-lxc.sh` (APT repository, `apt-mark hold`) | `bin/grafana-platform install` (signed RPM, `dnf versionlock`, vendored+pinned key) |
 | Service | Debian package unit + LXC systemd drop-in | RPM unit `grafana-server.service`, EnvironmentFile `/etc/sysconfig/grafana-server` |
 | Listener | `http://192.168.1.194:3000` | `https://<GRAFANA_DOMAIN>:3000`, TLS ≥ 1.2, HSTS, secure cookies |

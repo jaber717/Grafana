@@ -1,4 +1,4 @@
-# Backup, restore and recovery (RHEL 9.7 deployment)
+# Backup, restore and recovery (RHEL 9 deployment)
 
 ## What a backup is
 
@@ -48,10 +48,10 @@ sudo grafana-platform backup --include-secrets    # + secrets and TLS key (set B
 sudo grafana-platform restore /var/backups/grafana-platform/grafana-platform-<stamp>-manual.tar.gz        # asks for confirmation; --yes to skip
 ```
 Steps performed: verify archive → compare versions and `secret_key` → safety backup → stop Grafana → restore database, configuration (and secrets if included) → clear the search index → re-install plugins →
-start → wait for health → full `verify`. **Tested:** a dashboard and a datasource were deleted and a junk dashboard created; after the restore the originals were back and the junk dashboard gone (exact results of the final acceptance run: [VALIDATION-RHEL97.md](VALIDATION-RHEL97.md)).
+start → wait for health → full `verify`. **Tested:** a dashboard and a datasource were deleted and a junk dashboard created; after the restore the originals were back and the junk dashboard gone (exact results of the final acceptance run: [VALIDATION-RHEL9.md](VALIDATION-RHEL9.md)).
 
-### C. Recover a lost server (bare RHEL 9.7 host)
-1. Prepare the host as for a new install (RHEL repositories, [PRODUCTION-RHEL97.md](PRODUCTION-RHEL97.md) §2) and unpack the release.
+### C. Recover a lost server (bare RHEL 9 host)
+1. Prepare the host as for a new install (RHEL repositories, [PRODUCTION-RHEL9.md](PRODUCTION-RHEL9.md) §2) and unpack the release.
 2. If the archive was made with `--include-secrets`:
    ```bash
    sudo bin/grafana-platform restore /path/archive.tar.gz --bootstrap     # puts platform.env, secrets, item map, CA and TLS files back (no Grafana needed yet)
@@ -61,10 +61,10 @@ start → wait for health → full `verify`. **Tested:** a dashboard and a datas
    Otherwise recreate `platform.env`, the secret files (**including the original `secret-key`**) and the certificate yourself, `install`, then `restore`.
 3. `sudo grafana-platform verify`.
 **Tested:** Grafana, `/etc/grafana`, `/var/lib/grafana`, `/etc/grafana-platform` (env + secrets) and the TLS files were all deleted; the three commands above rebuilt the server; the marker dashboard created before the
-disaster was back, both datasources reported healthy (proving the restored `secret_key`) and `verify` passed (exact results: [VALIDATION-RHEL97.md](VALIDATION-RHEL97.md)).
+disaster was back, both datasources reported healthy (proving the restored `secret_key`) and `verify` passed (exact results: [VALIDATION-RHEL9.md](VALIDATION-RHEL9.md)).
 
 ### D. Undo an upgrade
-`grafana-platform upgrade` takes a `pre-upgrade` archive and caches the previous RPM; `grafana-platform rollback` (or the automatic rollback when the post-upgrade verification fails) restores both. See [PRODUCTION-RHEL97.md](PRODUCTION-RHEL97.md) §6.
+`grafana-platform upgrade` takes a `pre-upgrade` archive and caches the previous RPM; `grafana-platform rollback` (or the automatic rollback when the post-upgrade verification fails) restores both. See [PRODUCTION-RHEL9.md](PRODUCTION-RHEL9.md) §6.
 
 ### E. Check an archive without restoring it
 ```bash

@@ -80,7 +80,7 @@ else skip "vendored key fingerprint (gpg missing)"; fi
 BADP=$(sed 's/#.*//' plugins/plugins.txt | awk 'NF && $3 !~ /^[0-9a-f]{64}$/ {print $1}')
 if [ -z "$BADP" ]; then ok "every plugin has a pinned SHA-256"; else bad "plugin(s) without a SHA-256 pin: $BADP"; fi
 if grep -qE '^GRAFANA_RPM_SHA256=[0-9a-f]{64}$' VERSIONS.env; then ok "Grafana RPM SHA-256 pinned"; else bad "GRAFANA_RPM_SHA256 missing in VERSIONS.env"; fi
-MISSING=""; for d in docs/PRODUCTION-RHEL97.md docs/BACKUP-RESTORE.md docs/OFFLINE.md docs/SECURITY-PRODUCTION.md docs/LAB-VS-PRODUCTION.md docs/ZABBIX-ITEM-MAP.md docs/GITHUB-ACCESS.md docs/VALIDATION-RHEL97.md; do [ -s "$d" ] || MISSING="$MISSING $d"; done
+MISSING=""; for d in docs/PRODUCTION-RHEL9.md docs/BACKUP-RESTORE.md docs/OFFLINE.md docs/SECURITY-PRODUCTION.md docs/LAB-VS-PRODUCTION.md docs/ZABBIX-ITEM-MAP.md docs/GITHUB-ACCESS.md docs/VALIDATION-RHEL9.md; do [ -s "$d" ] || MISSING="$MISSING $d"; done
 if [ -z "$MISSING" ]; then ok "required documents present"; else bad "missing document(s):$MISSING"; fi
 
 echo; if [ "$FAIL" -eq 0 ]; then echo "RELEASE GATE: PASS ($SKIP skipped)"; else echo "RELEASE GATE: FAIL ($FAIL)"; fi

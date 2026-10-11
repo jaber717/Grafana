@@ -1,11 +1,10 @@
-# Grafana on RHEL 9.7 — production installation guide
+# Grafana on RHEL 9 — production installation guide
 
 Native Grafana OSS (RPM + systemd), the seven dashboards, two datasources (Zabbix, ClickHouse/Akvorado), two folders and the NOC playlist,
 deployed and operated by one command: `grafana-platform`. Nothing here uses Debian, LXC or Docker. The LAB (grafana-01, Debian 12 LXC) is described in
 [LAB-VS-PRODUCTION.md](LAB-VS-PRODUCTION.md) and is untouched by this release.
 
-> **Status of the evidence** — see [VALIDATION-RHEL97.md](VALIDATION-RHEL97.md). The platform was accepted on disposable **RHEL 9.6** machines; a
-> run on a real **RHEL 9.7** machine has not been done (no 9.7 media or subscription was available) and is the one open gate.
+> **Status of the evidence** — [VALIDATION-RHEL9.md](VALIDATION-RHEL9.md). Full acceptance (clean install, idempotency, backup/restore, disaster recovery, upgrade/rollback, offline installation) was run on **RHEL 9.6**. Other RHEL 9.x releases are supported targets: `preflight` accepts any 9.x and checks the actual dependencies, but they were not individually validated.
 
 ## 1. Architecture
 
@@ -28,7 +27,7 @@ deployed and operated by one command: `grafana-platform`. Nothing here uses Debi
 
 | Item | Requirement |
 |---|---|
-| OS | Red Hat Enterprise Linux **9.7** (9.x accepted with a WARN), x86_64, SELinux **Enforcing**, firewalld **active**, NTP synchronised |
+| OS | Red Hat Enterprise Linux **9.x** (any minor release; RHEL 8 and RHEL 10 are rejected by preflight), x86_64, SELinux **Enforcing**, firewalld **active**, NTP synchronised |
 | CPU / RAM | 2 vCPU / 4 GiB (minimum 2 GiB) |
 | Disk | `/` 15 GiB free; `/var/lib/grafana` on its own volume is recommended (WARN otherwise); 1 GiB per month of dashboards/annotations is generous |
 | Repositories | RHEL BaseOS + AppStream (subscription, Satellite, or the installation ISO) — needed for `unzip`, `sqlite`, `xz`, `python3-dnf-plugin-versionlock`, `policycoreutils-python-utils`, and `nodejs` (AppStream, module `nodejs:20`) unless the offline bundle supplies Node.js |

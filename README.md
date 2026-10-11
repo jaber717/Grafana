@@ -5,12 +5,11 @@ seven dashboards (UIDs preserved), two folders, two datasources, one playlist.
 
 | | |
 |---|---|
-| **Production target** | **RHEL 9.7**, native signed RPM + systemd, SELinux Enforcing, firewalld, TLS, secrets in files — `bin/grafana-platform` · [docs/PRODUCTION-RHEL97.md](docs/PRODUCTION-RHEL97.md) |
+| **Production target** | **RHEL 9**, native signed RPM + systemd, SELinux Enforcing, firewalld, TLS, secrets in files — `bin/grafana-platform` · [docs/PRODUCTION-RHEL9.md](docs/PRODUCTION-RHEL9.md) |
 | **LAB (unchanged)** | grafana-01, Debian 12 LXC — `lab/scripts/*-lxc.sh`, API tools `scripts/apply.sh`, `verify.sh` · [docs/LAB-VS-PRODUCTION.md](docs/LAB-VS-PRODUCTION.md) |
-| **Evidence** | [docs/VALIDATION-RHEL97.md](docs/VALIDATION-RHEL97.md) — acceptance matrix, exact versions tested, open gates |
+| **Evidence** | [docs/VALIDATION-RHEL9.md](docs/VALIDATION-RHEL9.md) — acceptance matrix, exact versions tested, open gates |
 
-> **Honest status:** the platform was accepted on disposable **RHEL 9.6** machines (clean install, idempotency, backup/restore/disaster recovery, upgrade/rollback, offline bundle).
-> It has **not** yet been run on a real **RHEL 9.7** host (no 9.7 media/subscription was available) — see the matrix before calling it production-proven.
+> **Tested on RHEL 9.6** (clean install, idempotency, backup/restore/disaster recovery, upgrade/rollback, offline bundle). Any RHEL 9.x is accepted by `preflight` (RHEL 8 and 10 are rejected); other 9.x releases are supported targets, not individually validated.
 
 ## Production in five commands
 
@@ -47,4 +46,4 @@ Afterwards: `grafana-platform verify | status | backup | restore | upgrade | rol
 * The LAB (`grafana-01`) is not touched by this release; its documents stay in `docs/` (`installation.md`, `live-inventory.md`, …).
 
 ## Release discipline
-`VERSION`, `CHANGELOG.md`, `scripts/release-gate.sh` (must PASS), annotated tags `vX.Y.Z`, release assets with SHA-256 files; `docs/VALIDATION-RHEL97.md` states what was verified, on what, and what is still open.
+`VERSION`, `CHANGELOG.md`, `scripts/release-gate.sh` (must PASS), annotated tags `vX.Y.Z`, release assets with SHA-256 files; `docs/VALIDATION-RHEL9.md` states what was verified, on what, and what is still open.

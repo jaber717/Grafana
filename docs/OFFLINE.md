@@ -1,7 +1,7 @@
 # Offline (air-gapped) installation
 
-For a RHEL 9.7 server with **no Internet access**. "Offline" means the *Grafana platform* needs nothing from the Internet; the server must still have the RHEL BaseOS and
-AppStream repositories (Satellite, a local mirror, or the RHEL 9.7 installation ISO mounted as a repository) because the prerequisites (`unzip`, `sqlite`, `xz`,
+For a RHEL 9 server with **no Internet access**. "Offline" means the *Grafana platform* needs nothing from the Internet; the server must still have the RHEL BaseOS and
+AppStream repositories (Satellite, a local mirror, or the RHEL 9 installation ISO mounted as a repository) because the prerequisites (`unzip`, `sqlite`, `xz`,
 `python3-dnf-plugin-versionlock`, `policycoreutils-python-utils`) come from them.
 
 ## What the bundle contains
@@ -33,8 +33,8 @@ cp env/production.env.example /root/grafana.env      # set PACKAGE_SOURCE=bundle
 sudo bin/grafana-platform preflight --env-file /root/grafana.env
 sudo bin/grafana-platform install   --env-file /root/grafana.env
 ```
-Everything else (secrets, certificate, item map) is exactly as in [PRODUCTION-RHEL97.md](PRODUCTION-RHEL97.md). Upgrades work the same way: bring the next bundle, `sudo bin/grafana-platform upgrade`.
+Everything else (secrets, certificate, item map) is exactly as in [PRODUCTION-RHEL9.md](PRODUCTION-RHEL9.md). Upgrades work the same way: bring the next bundle, `sudo bin/grafana-platform upgrade`.
 The cached previous RPM for rollbacks lives in `BACKUP_DIR/rpm`.
 
 **Tested** on a RHEL 9.6 virtual machine whose firewall dropped every packet except loopback and replies: preflight (checksums verified), install (RPM signature OK, plugins and Node.js from
-the bundle), verification and datasource health against an equally isolated Akvorado server — see [VALIDATION-RHEL97.md](VALIDATION-RHEL97.md).
+the bundle), verification and datasource health against an equally isolated Akvorado server — see [VALIDATION-RHEL9.md](VALIDATION-RHEL9.md).
