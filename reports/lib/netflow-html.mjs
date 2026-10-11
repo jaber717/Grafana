@@ -76,7 +76,7 @@ ${kpi({ cls: m.status === 'COMPLETE' ? 'ok' : 'warn', label: 'Data coverage', va
   const exp = `<div class="sec"><h3>Exporters (each listed separately - not additive)</h3>${T.exporters.length ? table([
     { key: 'Exporter', label: 'Exporter' }, { key: 'Site', label: 'Site', fmt: (r) => esc(r.Site || '-') },
     { label: 'Inbound', align: 'r', fmt: (r) => esc(fmtBytes(r.InboundBytes)) }, { label: 'Outbound', align: 'r', fmt: (r) => esc(fmtBytes(r.OutboundBytes)) },
-    { label: 'Sampling', align: 'r', fmt: (r) => (r.Sampled ? `1:${r.SamplingRate}` : 'none') }, { label: 'Coverage', align: 'r', fmt: (r) => `<span class="st ${r.Coverage >= 0.95 ? 'COMPLETE' : 'PARTIAL'}">${esc(fmtPct(r.Coverage * 100, 0))}</span>` },
+    { label: 'Sampling', align: 'r', fmt: (r) => (r.Sampled ? `1:${r.MaxSamplingRate}` : 'none') }, { label: 'Coverage', align: 'r', fmt: (r) => `<span class="st ${r.Coverage >= 0.95 ? 'COMPLETE' : 'PARTIAL'}">${esc(fmtPct(r.Coverage * 100, 0))}</span>` },
     { label: 'Last record', align: 'r', fmt: (r) => esc(fmtClock(Number(r.LastSeen) * 1000)) },
   ], T.exporters) : emptyRow('No exporter data')}</div>`;
   const notes = `<div class="sec" style="flex:1 1 auto"><h3>Data quality &amp; methodology</h3><ul class="obs note" style="gap:1.6mm">${m.notes.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>`;

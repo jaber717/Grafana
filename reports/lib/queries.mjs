@@ -40,7 +40,7 @@ export const NETFLOW_QUERIES = {
   },
   exporters: {
     title: 'Exporters',
-    sql: `SELECT ExporterName AS Exporter, any(ExporterSite) AS Site, sumIf(Bytes * SamplingRate, ${DIR} = 'inbound') AS InboundBytes, sumIf(Bytes * SamplingRate, ${DIR} = 'outbound') AS OutboundBytes, max(SamplingRate) AS SamplingRate, uniqExact(TimeReceived) AS Buckets, toUnixTimestamp(max(TimeReceived)) AS LastSeen FROM default.flows_5m0s WHERE ${win()} GROUP BY Exporter ORDER BY InboundBytes + OutboundBytes DESC LIMIT 10`,
+    sql: `SELECT ExporterName AS Exporter, any(ExporterSite) AS Site, sumIf(Bytes * SamplingRate, ${DIR} = 'inbound') AS InboundBytes, sumIf(Bytes * SamplingRate, ${DIR} = 'outbound') AS OutboundBytes, max(SamplingRate) AS MaxSamplingRate, uniqExact(TimeReceived) AS Buckets, toUnixTimestamp(max(TimeReceived)) AS LastSeen FROM default.flows_5m0s WHERE ${win()} GROUP BY Exporter ORDER BY InboundBytes + OutboundBytes DESC LIMIT 10`,
   },
   top_src: {
     title: 'Top 10 source IPs',

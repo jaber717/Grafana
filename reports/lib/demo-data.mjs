@@ -48,9 +48,9 @@ export function netflowFixture(win, { scenario = 'normal' } = {}) {
     hourly,
     protocols: [{ Protocol: 'TCP', Bytes: pct(0.712) }, { Protocol: 'UDP', Bytes: pct(0.241) }, { Protocol: 'ICMP', Bytes: pct(0.011) }, { Protocol: 'Other', Bytes: pct(0.036) }],
     exporters: [
-      { Exporter: 'demo-edge-01', Site: 'DEMO-HQ', InboundBytes: Math.round(inB * 0.58), OutboundBytes: Math.round(outB * 0.55), SamplingRate: 1000, Buckets: observed, LastSeen: lastFlow },
-      { Exporter: 'demo-edge-02', Site: 'DEMO-DC', InboundBytes: Math.round(inB * 0.31), OutboundBytes: Math.round(outB * 0.35), SamplingRate: 1000, Buckets: observed, LastSeen: lastFlow },
-      { Exporter: 'demo-branch-01', Site: 'DEMO-BRANCH', InboundBytes: Math.round(inB * 0.11), OutboundBytes: Math.round(outB * 0.10), SamplingRate: 1000, Buckets: Math.round(observed * 0.97), LastSeen: lastFlow },
+      { Exporter: 'demo-edge-01', Site: 'DEMO-HQ', InboundBytes: Math.round(inB * 0.58), OutboundBytes: Math.round(outB * 0.55), MaxSamplingRate: 1000, Buckets: observed, LastSeen: lastFlow },
+      { Exporter: 'demo-edge-02', Site: 'DEMO-DC', InboundBytes: Math.round(inB * 0.31), OutboundBytes: Math.round(outB * 0.35), MaxSamplingRate: 1000, Buckets: observed, LastSeen: lastFlow },
+      { Exporter: 'demo-branch-01', Site: 'DEMO-BRANCH', InboundBytes: Math.round(inB * 0.11), OutboundBytes: Math.round(outB * 0.10), MaxSamplingRate: 1000, Buckets: Math.round(observed * 0.97), LastSeen: lastFlow },
     ],
     top_src: talkers([['203.0.113.10', 'DEMO-CDN-A'], ['198.51.100.24', 'DEMO-CLOUD-B'], ['203.0.113.77', 'DEMO-CDN-A'], ['192.0.2.45', 'DEMO-SAAS'], ['198.51.100.200', '-'], ['203.0.113.130', 'DEMO-CDN-C'], ['192.0.2.9', 'DEMO-DNS'], ['198.51.100.61', 'DEMO-CLOUD-B'], ['203.0.113.201', '-'], ['192.0.2.150', 'DEMO-SAAS']], [0.118, 0.094, 0.071, 0.058, 0.044, 0.039, 0.031, 0.027, 0.022, 0.018]),
     top_dst: talkers([['10.20.4.15', 'DEMO-LAN-HQ'], ['10.20.4.88', 'DEMO-LAN-HQ'], ['10.30.1.20', 'DEMO-LAN-DC'], ['10.20.9.4', 'DEMO-LAN-HQ'], ['10.40.2.31', 'DEMO-LAN-BR'], ['10.30.1.45', 'DEMO-LAN-DC'], ['10.20.4.120', 'DEMO-LAN-HQ'], ['10.30.5.2', 'DEMO-LAN-DC'], ['10.40.2.77', 'DEMO-LAN-BR'], ['10.20.7.19', 'DEMO-LAN-HQ']], [0.102, 0.083, 0.067, 0.055, 0.047, 0.036, 0.029, 0.024, 0.02, 0.016]),

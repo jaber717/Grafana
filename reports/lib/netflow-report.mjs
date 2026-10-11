@@ -63,7 +63,7 @@ export function buildNetflowModel({ win, rows, nowMs = Date.now(), demo = false 
   model.tables.protocols = withShare(rows.protocols || [], topTotal(rows.protocols || []));
   model.tables.exporters = (rows.exporters || []).map((e) => ({
     ...e, InboundBytes: num(e.InboundBytes), OutboundBytes: num(e.OutboundBytes), Coverage: Math.min(1, num(e.Buckets) / expectedBuckets(win.seconds)),
-    Sampled: num(e.SamplingRate) > 1,
+    Sampled: num(e.MaxSamplingRate) > 1,
   }));
   model.tables.bySite = (rows.by_site || []).map((r) => ({ ...r, InboundBytes: num(r.InboundBytes), OutboundBytes: num(r.OutboundBytes) }));
   model.tables.byIsp = (rows.by_isp || []).map((r) => ({ ...r, InboundBytes: num(r.InboundBytes), OutboundBytes: num(r.OutboundBytes) }));
