@@ -14,7 +14,8 @@ note() { printf '[INFO] %s\n' "$*" | tee -a "$ACC_LOG"; }
 check() { # check "description" <exit status of the condition>
   if [ "$2" -eq 0 ]; then ok "$1"; else bad "$1"; fi
 }
-expect_eq() { if [ "$2" = "$3" ]; then ok "$1 ($2)"; else bad "$1: got '$2', expected '$3'"; fi; }
+ERRPAT='No such file|FATAL|command not found|Connection (timed out|reset|refused)|^ssh: |Permission denied'
+expect_eq() { if grep -qaE "$ERRPAT" <<<"$2"; then bad "$1: the command itself failed: ${2:0:140}"; elif [ "$2" = "$3" ]; then ok "$1 ($2)"; else bad "$1: got '$2', expected '$3'"; fi; }
 expect_ge() { if [ "${2:-0}" -ge "$3" ] 2>/dev/null; then ok "$1 ($2 >= $3)"; else bad "$1: got '$2', expected >= $3"; fi; }
 expect_match() { if grep -qaE -- "$3" <<<"$2"; then ok "$1"; else bad "$1: '${2:0:120}' does not match /$3/"; fi; }
 acc_summary() { printf '\nACCEPTANCE: %d PASS, %d FAIL\n' "$ACC_PASS" "$ACC_FAIL" | tee -a "$ACC_LOG"; [ "$ACC_FAIL" -eq 0 ]; }

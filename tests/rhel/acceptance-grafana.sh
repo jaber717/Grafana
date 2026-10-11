@@ -34,7 +34,9 @@ expect_match "G is RHEL 9" "$(_ssh "$G" 'grep ^PRETTY_NAME /etc/os-release')" 'R
 expect_eq "G SELinux" "$(_ssh "$G" getenforce)" Enforcing
 expect_eq "G firewalld" "$(_ssh "$G" 'systemctl is-active firewalld')" active
 expect_eq "G has no Grafana yet (clean host)" "$(_ssh "$G" 'rpm -q grafana >/dev/null 2>&1 && echo present || echo absent')" absent
-RG "bash $HG/tests/rhel/setup-grafana-test.sh $HG $A" >/dev/null
+SETUP_OUT=$(RG "bash $HG/tests/rhel/setup-grafana-test.sh $HG $A 2>&1; echo setup-rc=$?")
+expect_match "test host prepared (PKI, dummy secrets, mock Zabbix, item map, environment file)" "$SETUP_OUT" 'setup-rc=0'
+[ "$(echo "$SETUP_OUT" | tail -1)" = "setup-rc=0" ] || { note "setup output: $SETUP_OUT"; acc_summary; exit 1; }
 # the ClickHouse datasource: the Akvorado test machine, verified TLS, dummy password, its throw-away CA
 CA=$(RA 'cat /etc/akvorado-platform/restored-tls/ca.pem 2>/dev/null || cat /root/ap-test/pki/ca.pem'); PW=$(RA 'tr -d "\r\n" < /etc/akvorado-platform/secrets/grafana-ro-password')
 printf '%s\n' "$CA" | ssh -i "$SSH_KEY" -o BatchMode=yes "$SSH_USER@$G" 'cat > /tmp/akvorado-ca.pem' 2>&1 | grep -av '^\*\*' || true
@@ -158,7 +160,7 @@ if [ "$SKIP_REBOOT" -eq 0 ]; then
 section "10. Reboot"
 _ssh "$G" 'sudo systemctl reboot' >/dev/null; sleep 40; wait_ssh "$G"; ok "G is back after the reboot"
 _ssh "$G" "sudo nft insert rule inet claude_isolation output ip daddr $A accept" >/dev/null
-RG "systemd-run --unit=gp-mock-zabbix-r --description=mock-zabbix /usr/bin/python3 $HG/tests/rhel/mock-zabbix.py /root/gp-test/pki/zabbix.test.lab.crt /root/gp-test/pki/zabbix.test.lab.key 8443 >/dev/null 2>&1; true"
+RG "d=/root/gp-test/pki; [ -d \$d ] || d=/root/gp-test/pki.lost; systemd-run --unit=gp-mock-zabbix-r --description=mock-zabbix /usr/bin/python3 $HG/tests/rhel/mock-zabbix.py \$d/zabbix.test.lab.crt \$d/zabbix.test.lab.key 8443 >/dev/null 2>&1; true"
 rc=1; for i in $(seq 1 30); do out=$(RG "/usr/local/sbin/grafana-platform verify"); if grep -qaE "$GREP_OK" <<<"$out"; then rc=0; break; fi; sleep 8; done
 check "Grafana came back on its own and verifies (test-only mock Zabbix and egress exception re-created)" "$rc"
 fi

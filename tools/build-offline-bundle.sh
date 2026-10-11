@@ -33,6 +33,8 @@ else
   tar -C "$ROOT" --exclude=./dist --exclude=./bundle --exclude=.git --exclude=node_modules -cf - . | tar -xf - -C "$STAGE/$NAME"
 fi
 
+find "$STAGE/$NAME" -type f \( -path "*/bin/*" -o -name "*.sh" -o -name "render.py" -o -name "*.mjs" -o -name "flowgen.py" -o -name "mock-zabbix.py" \) -exec chmod 0755 {} +   # executable bits (a Windows checkout does not carry them)
+
 echo "== Grafana RPM ($GRAFANA_RPM_NEVRA)"
 fetch "$GRAFANA_RPM_REPO_URL/Packages/$GRAFANA_RPM_FILE" "$STAGE/$NAME/bundle/rpm/${GRAFANA_RPM_NEVRA}.rpm" "$GRAFANA_RPM_SHA256"
 

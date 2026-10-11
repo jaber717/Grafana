@@ -294,6 +294,7 @@ rollback_inner() { # $1 archive $2 version-release to return to
   else dnf -y -q downgrade "grafana-$ver" </dev/null >/dev/null || die "could not downgrade to grafana-$ver (no cached RPM, repository unavailable?)"; fi
   [ "$(installed_version)" = "$ver" ] && pass "package returned to grafana-$ver" || die "package is $(installed_version) after the downgrade attempt"
   dnf -q versionlock add "grafana-$ver" >/dev/null 2>&1 || true
+  systemctl stop grafana-server || true   # the RPM scriptlets of the downgrade may have started it again: the database must not be replaced under a running Grafana
   OPT_YES=1; OPT_ARGS=("$arch"); RESTORE_FROM_ROLLBACK=1
   restore_state_only "$arch"
   start_service
