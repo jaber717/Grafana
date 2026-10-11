@@ -8,7 +8,7 @@ import { fetchNetflowRows, fetchInterfaceSeries } from './live.mjs';
 import { buildNetflowModel } from './netflow-report.mjs';
 import { buildInterfaceModel } from './interface-report.mjs';
 import { buildNetflowHtml, NETFLOW_SLOTS, NETFLOW_FILE, mmToPx } from './netflow-html.mjs';
-import { buildInterfaceHtml, INTERFACE_SLOT, UTIL_SLOT, INTERFACE_FILE } from './interface-html.mjs';
+import { buildInterfaceHtml, slotFor, UTIL_SLOT, INTERFACE_FILE } from './interface-html.mjs';
 import { interfacePanelId, liveRevision } from './dashboards.mjs';
 import { htmlToPdf as realHtmlToPdf } from './pdf.mjs';
 import { deliver, sha256 } from './delivery.mjs';
@@ -84,7 +84,7 @@ export async function generateOne(kind, ctx) {
       if (cfg.interfaces.some((i) => i.speedBps)) images.__util = await render(DASH_UID.interface, UTIL_SLOT, UTIL_SLOT.panelId);
       for (const [i, it] of cfg.interfaces.entries()) {
         const s = model.interfaces.find((x) => x.key === it.key);
-        if (s.status !== 'NO_DATA') images[it.key] = await render(DASH_UID.interface, INTERFACE_SLOT, interfacePanelId(i));
+        if (s.status !== 'NO_DATA') images[it.key] = await render(DASH_UID.interface, slotFor(cfg.interfaces.length), interfacePanelId(i));
       }
     }
     ({ html, pages } = buildInterfaceHtml(model, images));

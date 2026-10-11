@@ -19,7 +19,7 @@ const color = (name, c) => byName(name, [{ id: 'color', value: fixed(c) }]);
 
 const baseTs = (unit, extra = {}) => ({
   defaults: {
-    unit, decimals: 0, min: 0, noValue: 'NO DATA',
+    unit, min: 0, noValue: 'NO DATA',
     color: { mode: 'fixed', fixedColor: PALETTE.inbound },
     custom: { drawStyle: 'line', lineWidth: 2, lineInterpolation: 'linear', fillOpacity: 16, gradientMode: 'opacity', showPoints: 'never', spanNulls: false, axisBorderShow: false, axisSoftMin: 0, axisPlacement: 'auto', stacking: { mode: 'none', group: 'A' }, ...extra },
   },
@@ -78,7 +78,7 @@ export function netflowDashboard(source = 'live') {
   const hourFc = baseTs('decbytes', { drawStyle: 'bars', fillOpacity: 88, lineWidth: 0, gradientMode: 'none', barAlignment: 1, stacking: { mode: 'normal', group: 'A' } });
   hourFc.overrides = [color('Inbound', PALETTE.inbound), color('Outbound', PALETTE.outbound)];
   const pieFc = { defaults: { unit: 'decbytes', decimals: 1, noValue: 'NO DATA', color: { mode: 'palette-classic' } }, overrides: [color('TCP', PALETTE.inbound), color('UDP', PALETTE.outbound), color('ICMP', '#5F9E6E'), color('Other', PALETTE.other)] };
-  const barFc = { defaults: { unit: 'decbytes', decimals: 0, noValue: 'NO DATA', custom: { fillOpacity: 90, lineWidth: 0, gradientMode: 'none', axisBorderShow: false } }, overrides: [color('InboundBytes', PALETTE.inbound), color('OutboundBytes', PALETTE.outbound), byName('InboundBytes', [{ id: 'displayName', value: 'Inbound' }, { id: 'color', value: fixed(PALETTE.inbound) }]), byName('OutboundBytes', [{ id: 'displayName', value: 'Outbound' }, { id: 'color', value: fixed(PALETTE.outbound) }])] };
+  const barFc = { defaults: { unit: 'decbytes', noValue: 'NO DATA', custom: { fillOpacity: 90, lineWidth: 0, gradientMode: 'none', axisBorderShow: false } }, overrides: [color('InboundBytes', PALETTE.inbound), color('OutboundBytes', PALETTE.outbound), byName('InboundBytes', [{ id: 'displayName', value: 'Inbound' }, { id: 'color', value: fixed(PALETTE.inbound) }]), byName('OutboundBytes', [{ id: 'displayName', value: 'Outbound' }, { id: 'color', value: fixed(PALETTE.outbound) }])] };
   const barOpts = (x) => ({ orientation: 'horizontal', xField: x, stacking: 'normal', showValue: 'never', barWidth: 0.7, groupWidth: 0.7, xTickLabelRotation: 0, legend: { showLegend: true, displayMode: 'list', placement: 'bottom' }, tooltip: { mode: 'multi', sort: 'none' } });
 
   const panels = [
@@ -96,12 +96,14 @@ export function netflowDashboard(source = 'live') {
 }
 
 // ---- Interface dashboard -------------------------------------------------------------------------------------------------------
-export const zbxTarget = (host, item, refId, scale = null) => ({
+// The Zabbix datasource names series after the ITEM; the display name comes from the setAlias function (a plain `alias` property is ignored)
+export const zbxTarget = (host, item, refId, scale = null, alias = null) => ({
   datasource: DS_ZBX, queryType: '0', refId, resultFormat: 'time_series',
   group: { filter: '/.*/' }, host: { filter: host }, application: { filter: '' }, itemTag: { filter: '' }, item: { filter: item },
   functions: [
     { def: { name: 'groupBy', category: 'Transform', params: [{ name: 'interval', type: 'string' }, { name: 'function', options: ['avg', 'min', 'max', 'sum', 'count', 'median', 'first', 'last'], type: 'string' }], defaultParams: ['1m', 'avg'] }, params: ['5m', 'avg'], added: false },
     ...(scale ? [{ def: { name: 'scale', category: 'Transform', params: [{ name: 'factor', type: 'float' }], defaultParams: [100] }, params: [scale], added: false }] : []),
+    ...(alias ? [{ def: { name: 'setAlias', category: 'Alias', params: [{ name: 'alias', type: 'string' }], defaultParams: [] }, params: [alias], added: false }] : []),
   ],
   options: { showDisabledItems: false, skipEmptyValues: false, disableDataAlignment: false, useZabbixValueMapping: false },
   table: { skipEmptyValues: false }, trigger: { filter: '' }, tags: { filter: '' }, proxy: { filter: '' },
@@ -121,7 +123,7 @@ export function interfaceDashboard(cfg, source = 'live') {
     fc.overrides = [color('Inbound', PALETTE.inbound), color('Outbound', PALETTE.outbound)];
     const targets = demo
       ? demoSeries(demo.byKey[it.key], ['Inbound', 'Outbound'])
-      : [{ ...zbxTarget(it.device, it.inboundItem, 'A'), alias: 'Inbound' }, { ...zbxTarget(it.device, it.outboundItem, 'B'), alias: 'Outbound' }];
+      : [zbxTarget(it.device, it.inboundItem, 'A', null, 'Inbound'), zbxTarget(it.device, it.outboundItem, 'B', null, 'Outbound')];
     panels.push(panel(interfacePanelId(i), `${it.site} - ${it.interface}${it.description ? ` (${it.description})` : ''}`, 'timeseries', 12, 8, i * 8, fc, tsOptions(), targets, { description: `device=${it.device} group=${it.group}${it.boundary ? ` boundary=${it.boundary}` : ''} speed=${it.speedBps ?? 'unknown'}` }));
   });
   // Peak utilisation ranking: util % series (live: Zabbix scale(100/speed); DEMO: same values) -> reduce(max) -> sort -> top 10
@@ -134,7 +136,7 @@ export function interfaceDashboard(cfg, source = 'live') {
       const pct = (r) => { const v = r[dir === 'in' ? 'Inbound' : 'Outbound']; return v == null ? 'null' : ((v / it.speedBps) * 100).toFixed(2); };
       utilTargets.push(demo
         ? { datasource: DS_DEMO, scenarioId: 'csv_metric_values', alias, refId, stringInput: [...demo.byKey[it.key].map(pct), 'null'].join(',') }
-        : { ...zbxTarget(it.device, item, refId, 100 / it.speedBps), alias });
+        : zbxTarget(it.device, item, refId, 100 / it.speedBps, alias));
     }
   });
   const utilFc = { defaults: { unit: 'percent', decimals: 1, min: 0, max: 100, noValue: 'NO DATA', color: { mode: 'thresholds' }, thresholds: { mode: 'absolute', steps: [{ color: PALETTE.inbound, value: null }, { color: PALETTE.warn, value: 70 }, { color: PALETTE.crit, value: 90 }] } }, overrides: [] };

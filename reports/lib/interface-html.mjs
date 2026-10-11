@@ -6,9 +6,11 @@ import { esc, fmtBytes, fmtBps, fmtPct, fmtChange, fmtClock, fmtDateTime } from 
 import { kpi, table, page, img, document_, emptyRow } from './html.mjs';
 import { interfacePanelId } from './dashboards.mjs';
 
-export const INTERFACE_SLOT = { w: 134.25, h: 42 };
+// Panel size adapts to the number of interfaces so a small estate does not leave a mostly empty page: 1-2 interfaces get full-width panels,
+// 3-4 a 2x2 grid, more a 2x3 grid. The renderer renders each panel at exactly this size (see generate.mjs), so there is no scaling.
+export const slotFor = (n) => (n <= 2 ? { w: 273, h: 66, cols: 1, perPage: 2 } : n <= 4 ? { w: 134.25, h: 68, cols: 2, perPage: 4 } : { w: 134.25, h: 42, cols: 2, perPage: 6 });
+const linkText = (n) => `${n} ${n === 1 ? 'link' : 'links'}`;
 export const UTIL_SLOT = { panelId: 2, w: 180, h: 54 };
-const PER_PAGE = 6;
 const SUMMARY_FIRST = 9;
 const SUMMARY_CONT = 16;
 export const INTERFACE_FILE = (date) => `Daily-Interface-Traffic-${date}.pdf`;
@@ -20,13 +22,13 @@ const st = (s) => `<span class="st ${s}">${s === 'NO_DATA' ? 'NO DATA' : s}</spa
 const covPct = (c) => (c == null ? 'N/A' : `${Math.round(c * 100)}%`);
 const speed = (s) => (s ? fmtBps(s) : 'not set');
 
-function pageCard(s, png) {
+function pageCard(s, png, slot) {
   const cap = `<div style="display:flex;justify-content:space-between;align-items:center;padding:0 3.4mm;height:6mm;border-top:.2mm solid var(--line);font-size:7.2pt;color:var(--mut)">
 <span>Link speed <b style="color:var(--ink);font-weight:500">${esc(speed(s.speedBps))}</b> &nbsp;·&nbsp; peak <b style="color:var(--ink);font-weight:500">${esc(fmtBps(s.peakBps))}</b> ${s.peakUtilPct != null ? `(${esc(fmtPct(s.peakUtilPct))})` : '(utilisation N/A)'}</span><span>${esc(covPct(s.coverage))} coverage &nbsp;${st(s.status)}</span></div>`;
   const body = s.status === 'NO_DATA'
-    ? `<div class="nodata" style="margin:2mm;border-radius:2mm;height:${INTERFACE_SLOT.h - 4}mm"><div class="sub" style="font-size:12pt">NO DATA</div><div class="exp" style="font-size:7.5pt">${esc(s.site)} ${esc(s.interface)}: no samples for this day</div></div>`
-    : `<div style="height:${INTERFACE_SLOT.h}mm">${png ? img(png, `${s.site} ${s.interface}`) : emptyRow('panel image not available')}</div>`;
-  return `<div class="card" style="width:${INTERFACE_SLOT.w}mm;height:${INTERFACE_SLOT.h + 6}mm;display:flex;flex-direction:column">${body}${cap}</div>`;
+    ? `<div class="nodata" style="margin:2mm;border-radius:2mm;height:${slot.h - 4}mm"><div class="sub" style="font-size:12pt">NO DATA</div><div class="exp" style="font-size:7.5pt">${esc(s.site)} ${esc(s.interface)}: no samples for this day</div></div>`
+    : `<div style="height:${slot.h}mm">${png ? img(png, `${s.site} ${s.interface}`) : emptyRow('panel image not available')}</div>`;
+  return `<div class="card" style="width:${slot.w}mm;height:${slot.h + 6}mm;display:flex;flex-direction:column">${body}${cap}</div>`;
 }
 
 export function buildInterfaceHtml(model, images = {}) {
@@ -40,8 +42,8 @@ function overviewRows(m) {
     b.members.forEach((k) => inBoundary.add(k));
     const t = b.total;
     rows.push(t
-      ? { site: b.site, scope: `${b.boundary} (${b.members.length} links)`, inB: t.inbound.bytes, outB: t.outbound.bytes, avgIn: t.inbound.avgBps, avgOut: t.outbound.avgBps, util: t.peakUtilPct, cov: t.coverage, status: t.coverage >= 0.95 ? 'COMPLETE' : t.coverage > 0 ? 'PARTIAL' : 'NO_DATA' }
-      : { site: b.site || '-', scope: `${b.boundary} (${b.members.length} links)`, inB: null, outB: null, avgIn: null, avgOut: null, util: null, cov: 0, status: 'NO_DATA' });
+      ? { site: b.site, scope: `${b.boundary} (${linkText(b.members.length)})`, inB: t.inbound.bytes, outB: t.outbound.bytes, avgIn: t.inbound.avgBps, avgOut: t.outbound.avgBps, util: t.peakUtilPct, cov: t.coverage, status: t.coverage >= 0.95 ? 'COMPLETE' : t.coverage > 0 ? 'PARTIAL' : 'NO_DATA' }
+      : { site: b.site || '-', scope: `${b.boundary} (${linkText(b.members.length)})`, inB: null, outB: null, avgIn: null, avgOut: null, util: null, cov: 0, status: 'NO_DATA' });
   }
   for (const s of m.interfaces) if (!inBoundary.has(s.key)) rows.push({ site: s.site, scope: `${s.interface}${s.description ? ` · ${s.description}` : ''}`, inB: s.inbound.bytes, outB: s.outbound.bytes, avgIn: s.inbound.avgBps, avgOut: s.outbound.avgBps, util: s.peakUtilPct, cov: s.coverage, status: s.status });
   return rows;
@@ -49,7 +51,8 @@ function overviewRows(m) {
 
 function fullHtml(m, im) {
   const list = m.interfaces;
-  const panelPages = Math.ceil(list.length / PER_PAGE);
+  const slot = slotFor(list.length);
+  const panelPages = Math.ceil(list.length / slot.perPage);
   const summaryRest = Math.max(0, list.length - SUMMARY_FIRST);
   const techPages = 1 + Math.ceil(summaryRest / SUMMARY_CONT);
   const total = 1 + panelPages + techPages;
@@ -87,10 +90,10 @@ ${kpi({ cls: m.status === 'COMPLETE' ? 'ok' : 'warn', label: 'Data completeness'
 
   const pages = [p1];
   for (let pn = 0; pn < panelPages; pn++) {
-    const chunk = list.slice(pn * PER_PAGE, pn * PER_PAGE + PER_PAGE);
-    const cards = chunk.map((s) => pageCard(s, im[s.key]));
+    const chunk = list.slice(pn * slot.perPage, pn * slot.perPage + slot.perPage);
+    const cards = chunk.map((s) => pageCard(s, im[s.key], slot));
     const rowsHtml = [];
-    for (let i = 0; i < cards.length; i += 2) rowsHtml.push(`<div style="display:flex;gap:4.5mm">${cards[i]}${cards[i + 1] || ''}</div>`);
+    for (let i = 0; i < cards.length; i += slot.cols) rowsHtml.push(`<div style="display:flex;gap:4.5mm">${cards.slice(i, i + slot.cols).join('')}</div>`);
     pages.push(page({ n: 2 + pn, total, kicker: 'NOC · Interface traffic', title: `Traffic Analysis${panelPages > 1 ? ` (${pn + 1}/${panelPages})` : ''}`, model: m, left: FOOT, extra: `Data coverage ${complete}/${list.length} interfaces complete`, body: `<div style="display:flex;flex-direction:column;gap:3.6mm">${rowsHtml.join('')}</div>` }));
   }
 

@@ -2,7 +2,7 @@
 // grafana-report - daily NetFlow and interface traffic reports rendered by Grafana.
 //
 //   run               generate both reports for the previous Asia/Riyadh day and deliver them (what the systemd timer runs)
-//   generate          generate the PDFs only (manual "Generate Report"); never sends anything
+//   generate          generate the PDFs only (manual "Generate Report"); never sends anything (--keep-html also keeps the page HTML for debugging)
 //   deliver           deliver already generated PDFs of a day (e-mail / Telegram), duplicate-protected
 //   test-delivery     send a clearly marked TEST message with sample PDFs to the configured (or --to) recipients
 //   check-config      validate settings, interface list, Chromium, Grafana access and dashboard revisions
@@ -13,7 +13,7 @@
 //
 // Settings: --settings FILE (default $REPORT_SETTINGS or /etc/grafana-platform/reports/report.env). Secrets are read from files only.
 // Exit codes: 0 ok | 1 configuration/usage error | 2 report generation failed | 3 delivery failed or partial
-import { readFileSync, writeFileSync, existsSync, readdirSync, mkdirSync, copyFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, readdirSync, mkdirSync, copyFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -56,7 +56,7 @@ async function main() {
     case 'run': case 'generate': {
       const { settings, warnings } = need();
       warnings.forEach((w) => console.error(`warning: ${w}`));
-      const r = await runDaily({ settings, date, kinds, force: !!flags.force, noDeliver: cmd === 'generate', log: loggerFor(settings) });
+      const r = await runDaily({ settings, date, kinds, force: !!flags.force, noDeliver: cmd === 'generate', keepHtml: !!flags['keep-html'], log: loggerFor(settings) });
       if (cmd === 'generate') for (const x of r.results) console.log(`${x.model.status.padEnd(8)} ${x.file.path} (${x.file.pages} pages, ${Math.round(x.file.bytes / 1024)} KB)`);
       return r.exitCode;
     }
@@ -120,8 +120,10 @@ async function main() {
       let cfg = null;
       try { cfg = loadInterfaceConfig(readFileSync(settings.interfacesFile, 'utf8')); line(true, `interfaces: ${cfg.interfaces.length} included, ${cfg.excluded.length} excluded, boundaries: ${cfg.boundaries.join(', ') || 'none'}`); } catch (e) { line(false, `interfaces file: ${e.message}`); }
       try {
-        const argvC = parseChromiumCmd(settings.chromiumCmd, '/tmp');
-        const r = spawnSync(argvC[0], [...argvC.slice(1), '--version'], { encoding: 'utf8', timeout: 60000 });
+        const wd = mkdtempSync(join(tmpdir(), 'rpt-chk-'));        // a private subdirectory, exactly like a real run (a container cannot relabel /tmp itself)
+        const argvC = parseChromiumCmd(settings.chromiumCmd, wd);
+        const r = spawnSync(argvC[0], [...argvC.slice(1), '--version'], { encoding: 'utf8', timeout: 120000 });
+        rmSync(wd, { recursive: true, force: true });
         line(r.status === 0, `Chromium: ${(r.stdout || r.stderr || '').trim().split('\n')[0] || 'no output'}`);
       } catch (e) { line(false, `Chromium: ${e.message}`); }
       if (settings.grafana.token) {

@@ -17,8 +17,8 @@ export async function fetchNetflowRows(g, win) {
 function targetsFor(cfg) {
   const t = [];
   cfg.interfaces.forEach((it, i) => {
-    t.push({ ...zbxTarget(it.device, it.inboundItem, `i${i}`), alias: 'Inbound', _key: it.key, _dir: 'inbound' });
-    t.push({ ...zbxTarget(it.device, it.outboundItem, `o${i}`), alias: 'Outbound', _key: it.key, _dir: 'outbound' });
+    t.push({ ...zbxTarget(it.device, it.inboundItem, `i${i}`, null, 'Inbound'), _key: it.key, _dir: 'inbound' });
+    t.push({ ...zbxTarget(it.device, it.outboundItem, `o${i}`, null, 'Outbound'), _key: it.key, _dir: 'outbound' });
   });
   return t;
 }
