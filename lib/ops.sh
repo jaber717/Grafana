@@ -174,7 +174,7 @@ cmd_restore() {
   systemctl stop grafana-server
   if [ "$(manifest_get secrets_included)" = 1 ]; then install -d -m 0750 -o root -g grafana "$SECRETS_DIR"; cp -a "$RESTORE_DIR/x/secrets/." "$SECRETS_DIR/"; fi
   install -m 0640 -o grafana -g grafana "$RESTORE_DIR/x/grafana.db" "$GRAFANA_VAR/grafana.db"
-  rm -f "$GRAFANA_VAR/grafana.db-wal" "$GRAFANA_VAR/grafana.db-shm"
+  rm -f "$GRAFANA_VAR/grafana.db-wal" "$GRAFANA_VAR/grafana.db-shm"; rm -rf "${GRAFANA_VAR:?}/unified-search"   # derived search index: rebuilt on start; a stale one would still serve restored-away dashboards
   (cd "$RESTORE_DIR/x/etc-grafana" && tar --exclude=sysconfig-grafana-server -cf - .) | tar -xf - -C "$GRAFANA_ETC"
   [ -f "$RESTORE_DIR/x/etc-grafana/sysconfig-grafana-server" ] && install -m 0640 -o root -g grafana "$RESTORE_DIR/x/etc-grafana/sysconfig-grafana-server" /etc/sysconfig/grafana-server
   [ -f "$RESTORE_DIR/x/etc-platform/zabbix-item-map.json" ] && [ ! -f "$ZABBIX_ITEM_MAP_FILE" ] && install -m 0640 -o root -g grafana "$RESTORE_DIR/x/etc-platform/zabbix-item-map.json" "$ZABBIX_ITEM_MAP_FILE"
@@ -266,14 +266,14 @@ rollback_inner() { # $1 archive $2 version-release to return to
   start_service
   pass "state restored from $(basename "$arch") and Grafana healthy on grafana-$ver"
   mark_upgrade_done 0
-  verify_all_after_rollback
+  verify_all_after_rollback "$ver"
 }
 
-verify_all_after_rollback() { step "Verification after rollback"; local v; v=$(want_version); GRAFANA_VERSION_OVERRIDE=${v%-*}; verify_all; }
+verify_all_after_rollback() { step "Verification after rollback"; export GRAFANA_VERSION_OVERRIDE=${1%-*}; verify_all; }
 
 restore_state_only() { # database + configuration from an archive (service already stopped)
   prepare_archive "$1"
-  install -m 0640 -o grafana -g grafana "$RESTORE_DIR/x/grafana.db" "$GRAFANA_VAR/grafana.db"; rm -f "$GRAFANA_VAR/grafana.db-wal" "$GRAFANA_VAR/grafana.db-shm"
+  install -m 0640 -o grafana -g grafana "$RESTORE_DIR/x/grafana.db" "$GRAFANA_VAR/grafana.db"; rm -f "$GRAFANA_VAR/grafana.db-wal" "$GRAFANA_VAR/grafana.db-shm"; rm -rf "${GRAFANA_VAR:?}/unified-search"
   if [ -d "$RESTORE_DIR/x/secrets" ]; then cp -a "$RESTORE_DIR/x/secrets/." "$SECRETS_DIR/"; fi
   (cd "$RESTORE_DIR/x/etc-grafana" && tar --exclude=sysconfig-grafana-server -cf - .) | tar -xf - -C "$GRAFANA_ETC"
   chown -R root:grafana "$GRAFANA_ETC"; chmod 0640 "$GRAFANA_ETC/grafana.ini"

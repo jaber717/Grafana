@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # Idempotent installation steps. Every step checks the current state first and changes nothing when it already matches.
 
-PREREQS=(curl tar unzip openssl sqlite policycoreutils-python-utils python3 python3-dnf-plugin-versionlock)
+PREREQS=(curl tar xz unzip openssl sqlite policycoreutils-python-utils python3 python3-dnf-plugin-versionlock)
 
 ensure_prereqs() {
   local missing=() p
@@ -11,15 +11,17 @@ ensure_prereqs() {
 }
 
 ensure_node() {
-  if [ -n "$(node_bin)" ] && [ "$(node -p 'process.versions.node.split(".")[0]')" -ge 18 ]; then pass "Node.js $(node -v)"; return; fi
-  if [ "$PACKAGE_SOURCE" = bundle ] && [ -x "$BUNDLE_DIR/node/bin/node" ]; then
-    mkdir -p "$OPT/node"; cp -a "$BUNDLE_DIR/node/." "$OPT/node/"; ln -sfn "$OPT/node/bin/node" /usr/local/bin/node
-    pass "Node.js $(node -v) installed from the offline bundle"; return
+  if [ -n "$(node_bin)" ] && [ "$("$(node_bin)" -p 'process.versions.node.split(".")[0]')" -ge 18 ]; then pass "Node.js $("$(node_bin)" -v)"; return; fi
+  if [ "$PACKAGE_SOURCE" = bundle ] && [ -f "$BUNDLE_DIR/node/$NODE_BUNDLE_FILE" ]; then
+    [ "$(sha256sum "$BUNDLE_DIR/node/$NODE_BUNDLE_FILE" | cut -d' ' -f1)" = "$NODE_BUNDLE_SHA256" ] || die "bundled Node.js tarball fails its pinned SHA-256: refusing to install"
+    rm -rf "${OPT:?}/node"; mkdir -p "$OPT/node"; tar -xJf "$BUNDLE_DIR/node/$NODE_BUNDLE_FILE" -C "$OPT/node" --strip-components=1 --no-same-owner
+    ln -sfn "$OPT/node/bin/node" /usr/local/bin/node
+    pass "Node.js $("$(node_bin)" -v) installed from the offline bundle (SHA-256 verified)"; return
   fi
   dnf -y -q install nodejs >/dev/null 2>&1 || true
-  if [ -n "$(node_bin)" ] && [ "$(node -p 'process.versions.node.split(".")[0]')" -ge 18 ]; then pass "Node.js $(node -v) installed from AppStream"; return; fi
+  if [ -n "$(node_bin)" ] && [ "$("$(node_bin)" -p 'process.versions.node.split(".")[0]')" -ge 18 ]; then pass "Node.js $("$(node_bin)" -v) installed from AppStream"; return; fi
   dnf -y -q module enable nodejs:20 >/dev/null 2>&1 && dnf -y -q install nodejs >/dev/null 2>&1 || true
-  [ -n "$(node_bin)" ] && [ "$(node -p 'process.versions.node.split(".")[0]')" -ge 18 ] && pass "Node.js $(node -v) installed (module nodejs:20)" || die "could not provide Node.js >= 18"
+  [ -n "$(node_bin)" ] && [ "$("$(node_bin)" -p 'process.versions.node.split(".")[0]')" -ge 18 ] && pass "Node.js $("$(node_bin)" -v) installed (module nodejs:20)" || die "could not provide Node.js >= 18"
 }
 
 gpg_fingerprint() { GNUPGHOME=$(mktemp -d) gpg --batch --quiet --show-keys --with-colons "$1" 2>/dev/null | awk -F: '/^fpr/ {print $10; exit}'; }
@@ -100,7 +102,7 @@ install_ca_trust() {
     [ -n "$f" ] || continue
     if ! cmp -s "$f" "/etc/pki/ca-trust/source/anchors/$name.pem" 2>/dev/null; then install -m 0644 "$f" "/etc/pki/ca-trust/source/anchors/$name.pem"; changed=1; fi
   done
-  if [ "$changed" = 1 ]; then update-ca-trust extract; pass "private CA certificate(s) added to the system trust store"; else pass "CA trust store up to date"; fi
+  if [ "$changed" = 1 ]; then update-ca-trust extract; CONFIG_CHANGED=1; pass "private CA certificate(s) added to the system trust store"; else pass "CA trust store up to date"; fi
 }
 
 render_grafana_ini() {
@@ -230,7 +232,7 @@ deploy_release() {
   install -d -m 0755 "$OPT/releases"
   if [ "$RELEASE_DIR" != "$dest" ]; then
     rm -rf "$dest.new"; mkdir -p "$dest.new"
-    (cd "$RELEASE_DIR" && tar --exclude=.git --exclude=dist --exclude=backups --exclude=node_modules --exclude='env/production.env' -cf - .) | tar -xf - -C "$dest.new"
+    (cd "$RELEASE_DIR" && tar --exclude=.git --exclude=dist --exclude=backups --exclude=node_modules --exclude=./bundle --exclude='env/production.env' -cf - .) | tar -xf - -C "$dest.new"
     rm -rf "$dest"; mv "$dest.new" "$dest"
   fi
   ln -sfn "$dest" "$OPT/current"; ln -sfn "$OPT/current/bin/grafana-platform" /usr/local/sbin/grafana-platform
@@ -273,7 +275,7 @@ cmd_install() {
   step "Grafana package"; import_rpm_key; install_grafana; lock_version
   step "Secrets, TLS and trust"; install -d -m 0755 "$ETC"; ensure_secrets; install_tls; install_ca_trust
   step "Configuration"
-  install -m 0640 -o root -g grafana "$ENV_FILE_USED" "$ENV_INSTALLED" 2>/dev/null || cp "$ENV_FILE_USED" "$ENV_INSTALLED"
+  if [ ! "$ENV_FILE_USED" -ef "$ENV_INSTALLED" ]; then install -m 0640 -o root -g grafana "$ENV_FILE_USED" "$ENV_INSTALLED"; fi
   chmod 0640 "$ENV_INSTALLED"; chown root:grafana "$ENV_INSTALLED"; ENV_FILE_USED=$ENV_INSTALLED
   if [ -f "$ZABBIX_ITEM_MAP_FILE" ] && [ "$(dirname "$ZABBIX_ITEM_MAP_FILE")" != "$ETC" ]; then install -m 0640 -o root -g grafana "$ZABBIX_ITEM_MAP_FILE" "$ETC/zabbix-item-map.json"; ZABBIX_ITEM_MAP_FILE="$ETC/zabbix-item-map.json"; sed -i "s#^ZABBIX_ITEM_MAP_FILE=.*#ZABBIX_ITEM_MAP_FILE=$ZABBIX_ITEM_MAP_FILE#" "$ENV_INSTALLED"; fi
   render_grafana_ini

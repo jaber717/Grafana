@@ -92,13 +92,13 @@ run_preflight() {
     curl -sSI -m 15 "$GRAFANA_RPM_REPO_URL/repodata/repomd.xml" >/dev/null 2>&1 && pass "Grafana RPM repository reachable" || fail "cannot reach $GRAFANA_RPM_REPO_URL (use PACKAGE_SOURCE=bundle for an isolated server)"
     curl -sSI -m 15 "https://grafana.com/api/plugins/alexanderzobnin-zabbix-app" >/dev/null 2>&1 && pass "grafana.com plugin API reachable" || fail "cannot reach grafana.com (plugin downloads)"
   else
-    if [ -f "$BUNDLE_DIR/MANIFEST.sha256" ]; then (cd "$BUNDLE_DIR" && sha256sum -c --quiet MANIFEST.sha256 >/dev/null 2>&1) && pass "offline bundle checksums verify ($BUNDLE_DIR)" || fail "offline bundle fails its SHA-256 manifest"; else fail "offline bundle not found: $BUNDLE_DIR/MANIFEST.sha256"; fi
+    if [ -f "$BUNDLE_DIR/SHA256SUMS" ]; then (cd "$BUNDLE_DIR" && sha256sum -c --quiet SHA256SUMS >/dev/null 2>&1) && pass "offline bundle checksums verify ($BUNDLE_DIR)" || fail "offline bundle fails its SHA-256 manifest"; else fail "offline bundle not found: $BUNDLE_DIR/SHA256SUMS"; fi
   fi
   [ "$(dnf -q repolist 2>/dev/null | wc -l)" -gt 0 ] && pass "dnf has enabled repositories" || fail "dnf has no enabled repositories (RHEL BaseOS/AppStream are required for prerequisites)"
-  local p; for p in curl tar unzip openssl sqlite policycoreutils-python-utils python3 python3-dnf-plugin-versionlock; do
+  local p; for p in curl tar xz unzip openssl sqlite policycoreutils-python-utils python3 python3-dnf-plugin-versionlock; do
     if rpm -q "$p" >/dev/null 2>&1; then pass "prerequisite $p installed"; elif check_pkg_installable "$p"; then info "prerequisite $p will be installed from your repositories"; else fail "prerequisite $p is neither installed nor available from the enabled repositories"; fi
   done
-  if [ -n "$(node_bin)" ] && [ "$(node -p 'process.versions.node.split(".")[0]')" -ge 18 ]; then pass "Node.js $(node -v) available"; elif [ "$PACKAGE_SOURCE" = bundle ] && [ -x "$BUNDLE_DIR/node/bin/node" ]; then pass "Node.js from the offline bundle"; elif check_pkg_installable nodejs; then info "Node.js will be installed from your repositories (AppStream nodejs)"; else fail "Node.js >= 18 is required (AppStream nodejs or the offline bundle)"; fi
+  if [ -n "$(node_bin)" ] && [ "$("$(node_bin)" -p 'process.versions.node.split(".")[0]')" -ge 18 ]; then pass "Node.js $("$(node_bin)" -v) available"; elif [ "$PACKAGE_SOURCE" = bundle ] && [ -f "$BUNDLE_DIR/node/$NODE_BUNDLE_FILE" ]; then pass "Node.js $NODE_BUNDLE_VERSION from the offline bundle"; elif check_pkg_installable nodejs; then info "Node.js will be installed from your repositories (AppStream nodejs)"; else fail "Node.js >= 18 is required (AppStream nodejs or the offline bundle)"; fi
 
   step "NOC dashboards: Zabbix item map"
   if [ -f "$ZABBIX_ITEM_MAP_FILE" ]; then

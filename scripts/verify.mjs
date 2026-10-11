@@ -15,7 +15,7 @@ const out = []; let failN = 0, warnN = 0;
 const rec = (level, what, detail = '') => { out.push({ level, what, detail }); if (level === 'FAIL') failN++; if (level === 'WARN') warnN++; if (!args.json) console.log(`[${level}] ${what}${detail ? ' - ' + detail : ''}`); };
 
 const health = await get('/api/health').catch((e) => fail(`Grafana is not reachable at ${URL_}: ${e.message}`));
-const wantVersion = readFileSync(join(ROOT, 'VERSIONS.env'), 'utf8').match(/^GRAFANA_VERSION=(.+)$/m)?.[1];
+const wantVersion = process.env.GRAFANA_VERSION_OVERRIDE || readFileSync(join(ROOT, 'VERSIONS.env'), 'utf8').match(/^GRAFANA_VERSION=(.+)$/m)?.[1];
 rec(health.database === 'ok' ? 'PASS' : 'FAIL', 'health', `database=${health.database}`);
 rec(health.version === wantVersion ? 'PASS' : 'WARN', 'Grafana version', `live ${health.version}, repository ${wantVersion}`);
 

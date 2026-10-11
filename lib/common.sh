@@ -87,7 +87,9 @@ wait_health() { # $1 seconds
 secret() { cat "$SECRETS_DIR/$1" 2>/dev/null | tr -d '\r\n'; }
 
 # Run the Node-based content tools with the right environment (credentials from secret files, never printed).
-node_bin() { command -v node || true; }
+node_bin() { # sudo's secure_path usually omits /usr/local/bin, where the offline bundle puts node
+  local n; for n in "$(command -v node 2>/dev/null || true)" /usr/local/bin/node "$OPT/node/bin/node"; do [ -n "$n" ] && [ -x "$n" ] && { echo "$n"; return; }; done
+}
 run_content_tool() { # $1 script name (apply|verify|backup|restore), rest = args
   local tool=$1; shift
   local node; node=$(node_bin); [ -n "$node" ] || die "Node.js >= 18 not found"
