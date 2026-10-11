@@ -24,7 +24,10 @@ id grafana-report >/dev/null 2>&1 || useradd --system --gid grafana-report --hom
 grep -q '^grafana-report:' /etc/subuid 2>/dev/null || usermod --add-subuids 300000-365535 --add-subgids 300000-365535 grafana-report
 install -d -m 0750 -o root -g grafana-report "$ETC"
 install -d -m 0750 -o grafana-report -g grafana-report "$STATE" "$STATE/out" "$STATE/state" "$STATE/home" "$LOGD"
-say "user grafana-report, $ETC, $STATE, $LOGD"
+printf 'd /run/grafana-report 0700 grafana-report grafana-report -
+' > /etc/tmpfiles.d/grafana-report.conf
+systemd-tmpfiles --create /etc/tmpfiles.d/grafana-report.conf
+say "user grafana-report, $ETC, $STATE, $LOGD, /run/grafana-report (tmpfiles.d)"
 
 echo "== command"
 ln -sfn "$ROOT/bin/grafana-report" /usr/local/sbin/grafana-report

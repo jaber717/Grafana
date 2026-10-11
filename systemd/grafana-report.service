@@ -14,6 +14,8 @@ Environment=HOME=/var/lib/grafana-report/home
 Environment=XDG_RUNTIME_DIR=/run/grafana-report
 RuntimeDirectory=grafana-report
 RuntimeDirectoryMode=0700
+# keep the SAME runtime path between runs: Podman records it in its database and refuses a different one
+RuntimeDirectoryPreserve=yes
 StateDirectory=grafana-report
 StateDirectoryMode=0750
 LogsDirectory=grafana-report
@@ -22,16 +24,13 @@ TimeoutStartSec=30min
 # a failed delivery or generation must be visible in `systemctl status` and journald; the timer retries the next day, `grafana-report run` can be repeated safely
 # (duplicate protection) at any time
 Nice=10
-# hardening that is compatible with rootless Podman (NoNewPrivileges and RestrictNamespaces cannot be used: Podman needs setuid newuidmap and user namespaces)
+# Hardening: ONLY directives that were verified on RHEL 9.6 (SELinux enforcing) to work with rootless Podman. Directives implemented with seccomp
+# (ProtectKernelTunables/Modules, ProtectClock, LockPersonality, RestrictRealtime, SystemCallArchitectures, RestrictNamespaces) make systemd imply
+# NoNewPrivileges for an unprivileged service, which disables the setuid newuidmap that rootless containers need: the PDF step then fails with
+# "newuidmap: write to uid_map failed". The container itself is the sandbox for Chromium.
 PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=yes
-ReadWritePaths=/var/lib/grafana-report /var/log/grafana-report
-ProtectKernelTunables=yes
-ProtectKernelModules=yes
 ProtectControlGroups=yes
-ProtectClock=yes
-LockPersonality=yes
-RestrictRealtime=yes
-SystemCallArchitectures=native
+ReadWritePaths=/var/lib/grafana-report /var/log/grafana-report
 UMask=0027
