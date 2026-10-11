@@ -61,8 +61,9 @@ function boundaryTotal(cfgIfaces, summaries, win) {
   return { inbound, outbound, speedBps: speed, peakUtilPct: speed && peak >= 0 ? Math.round((peak / speed) * 1000) / 10 : null, coverage: Math.min(inbound.coverage ?? 0, outbound.coverage ?? 0) };
 }
 
-export function buildInterfaceModel({ win, cfg, series, prevSeries = {}, prevWin = null, nowMs = Date.now(), demo = false }) {
-  const summaries = new Map(cfg.interfaces.map((it) => [it.key, summarizeIface(it, series[it.key], win)]));
+export function buildInterfaceModel({ win, cfg, series, prevSeries = {}, prevWin = null, issues = {}, nowMs = Date.now(), demo = false }) {
+  // an interface whose item selection is broken (ambiguous / datasource error) is reported as NO DATA with the reason, never guessed
+  const summaries = new Map(cfg.interfaces.map((it) => [it.key, summarizeIface(it, issues[it.key] ? { inbound: [], outbound: [] } : series[it.key], win)]));
   const list = cfg.interfaces.map((it) => summaries.get(it.key));
   const reporting = list.filter((s) => s.status !== 'NO_DATA');
   const status = !reporting.length ? 'NO_DATA' : list.every((s) => s.status === 'COMPLETE') ? 'COMPLETE' : 'PARTIAL';
@@ -97,7 +98,8 @@ export function buildInterfaceModel({ win, cfg, series, prevSeries = {}, prevWin
   for (const s of list) { const p = s.status === 'COMPLETE' ? prevBytes(s.key) : null; s.change = p ? { inbound: changePct(s.inbound.bytes, p.in), outbound: changePct(s.outbound.bytes, p.out) } : { inbound: null, outbound: null }; }
   // missing-data indicators
   for (const s of list) {
-    if (s.status === 'NO_DATA') model.missing.push({ key: s.key, reason: 'no samples for the whole day' });
+    if (issues[s.key]) model.missing.push({ key: s.key, reason: `configuration issue: ${issues[s.key]}` });
+    else if (s.status === 'NO_DATA') model.missing.push({ key: s.key, reason: 'no samples for the whole day' });
     else if (s.status === 'PARTIAL') model.missing.push({ key: s.key, reason: 'incomplete', coverage: s.coverage, missingMinutes: s.missingMinutes, longestGapMinutes: s.longestGapMinutes });
   }
   // observations (facts only)

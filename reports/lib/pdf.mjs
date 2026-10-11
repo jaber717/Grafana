@@ -12,9 +12,19 @@ window.addEventListener('load',function(){var bad=[];document.querySelectorAll('
   if(r.right>q.right+1||r.bottom>q.bottom+1)bad.push('page '+(i+1)+': a block extends beyond the page')});});
  document.body.setAttribute('data-layout',bad.length?'BAD '+bad.join('; '):'OK');});</script>`;
 
-function run(bin, args, timeoutMs) {
+// CHROMIUM_CMD is a program plus optional leading arguments, split on spaces (no shell, no quoting). Placeholders: {workdir} (the temporary
+// directory this module writes the page into and reads the PDF from), {uid} and {gid}. Example for the pinned renderer image:
+//   docker run --rm --user {uid}:{gid} -v {workdir}:{workdir} --entrypoint chromium grafana/grafana-image-renderer@sha256:...
+export function parseChromiumCmd(cmd, workdir) {
+  const uid = process.getuid ? process.getuid() : 0, gid = process.getgid ? process.getgid() : 0;
+  if (existsSync(cmd)) return [cmd];                       // a plain path, possibly with spaces (e.g. a Windows install)
+  return cmd.trim().split(/\s+/).map((x) => x.replaceAll('{workdir}', workdir).replaceAll('{uid}', String(uid)).replaceAll('{gid}', String(gid)));
+}
+
+function run(argv, args, timeoutMs) {
+  const [bin, ...prefix] = argv;
   return new Promise((resolve, reject) => {
-    const p = spawn(bin, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    const p = spawn(bin, [...prefix, ...args], { stdio: ['ignore', 'pipe', 'pipe'] });
     let out = '', err = '';
     p.stdout.on('data', (d) => (out += d));
     p.stderr.on('data', (d) => (err += d));
@@ -36,13 +46,16 @@ export async function htmlToPdf(html, outPath, { chromium, expectedPages, timeou
     if (keepHtml) writeFileSync(keepHtml, html);
     const url = 'file:///' + file.replace(/\\/g, '/').replace(/^\/+/, '');
     const profile = join(dir, 'profile');
-    const dom = await run(chromium, [...FLAGS, `--user-data-dir=${profile}`, '--virtual-time-budget=4000', '--dump-dom', url], timeoutMs);
+    const argv = parseChromiumCmd(chromium, dir);
+    const dom = await run(argv, [...FLAGS, `--user-data-dir=${profile}`, '--virtual-time-budget=4000', '--dump-dom', url], timeoutMs);
     const m = dom.out.match(/data-layout="([^"]*)"/);
     if (!m) throw new Error(`layout check did not run: ${dom.err.slice(0, 300)}`);
     if (m[1] !== 'OK') throw new Error(`layout check failed: ${m[1]}`);
-    const pdf = await run(chromium, [...FLAGS, `--user-data-dir=${profile}`, `--print-to-pdf=${outPath}`, '--virtual-time-budget=4000', url], timeoutMs);
-    if (!existsSync(outPath)) throw new Error(`chromium produced no PDF: ${pdf.err.slice(0, 300)}`);
-    const buf = readFileSync(outPath);
+    const tmpPdf = join(dir, 'out.pdf');
+    const pdf = await run(argv, [...FLAGS, `--user-data-dir=${profile}`, `--print-to-pdf=${tmpPdf}`, '--virtual-time-budget=4000', url], timeoutMs);
+    if (!existsSync(tmpPdf)) throw new Error(`chromium produced no PDF: ${pdf.err.slice(0, 300)}`);
+    const buf = readFileSync(tmpPdf);
+    writeFileSync(outPath, buf);
     if (buf.subarray(0, 5).toString() !== '%PDF-') throw new Error('output is not a PDF');
     const pages = (buf.toString('latin1').match(/\/Type\s*\/Page[^s]/g) || []).length;
     if (expectedPages != null && pages !== expectedPages) throw new Error(`PDF has ${pages} pages, expected ${expectedPages}`);
