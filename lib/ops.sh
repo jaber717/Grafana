@@ -242,12 +242,11 @@ json.dump(d, open(p, "w"), indent=2)
 PY
 }
 
-upgrade_inner() {
-  local to=$1
+upgrade_inner() { # runs in a subshell inside an 'if': errexit is inactive there, so every step is checked explicitly
   dnf -q versionlock delete grafana >/dev/null 2>&1 || true
-  import_rpm_key; install_grafana; lock_version
-  install_plugins; render_grafana_ini; CONFIG_CHANGED=1; start_service
-  deploy_release; apply_content
+  import_rpm_key || return 1; install_grafana || return 1; lock_version || return 1
+  install_plugins || return 1; render_grafana_ini || return 1; CONFIG_CHANGED=1; start_service || return 1
+  deploy_release || return 1; apply_content || return 1
 }
 
 cmd_upgrade() {
