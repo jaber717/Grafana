@@ -32,9 +32,10 @@ export function rateAt(item, tSec) {
 export function history(item, from, till, gapHost = null) {
   const out = [];
   const host = HOSTS.find((h) => h.id === item.hostid).host;
-  const gapStart = Math.floor(from / 86400) * 86400 + 6 * 3600, gapEnd = gapStart + 90 * 60;
   for (let t = Math.ceil(from / 60) * 60; t <= till; t += 60) {
-    if (gapHost === host && t >= gapStart && t < gapEnd) continue;
+    // the gap is 06:00-07:30 Riyadh time on every day (90 minutes = 18 five-minute buckets)
+    const sinceMidnight = (t + 3 * 3600) % 86400;
+    if (gapHost === host && sinceMidnight >= 6 * 3600 && sinceMidnight < 7.5 * 3600) continue;
     out.push({ itemid: item.itemid, clock: String(t), value: String(Math.round(rateAt(item, t))), ns: '0' });
   }
   return out;
