@@ -28,7 +28,7 @@
 | Clean install on a fresh host | **PASS** online and offline | §1-§2 |
 | Idempotent re-run / no unnecessary change | **PASS** (`applied: 0 created, 0 updated, 12 unchanged`) | §2 |
 | Configuration deployment: 7 dashboards (original UIDs), 2 folders, 2 datasources, playlist | **PASS** | §4 |
-| Application health: both datasources healthy, every ClickHouse panel query of the NetFlow dashboards executes | **PASS** (59 queries) | §4 |
+| Application health: both datasources healthy, every ClickHouse panel query of the NetFlow dashboards executes | **PASS** | §4 |
 | Security: signed RPM key pinned, version lock, unprivileged service, TLS verified and TLS ≤ 1.1 refused, no literal password, firewalld source rule, no SELinux denial | **PASS** | §3 |
 | Network admission (allowed / denied / restored) | **PASS** | §5 |
 | Backup (plain and GPG-encrypted, wrong passphrase refused) | **PASS** | §6 |
