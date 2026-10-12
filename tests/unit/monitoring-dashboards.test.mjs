@@ -65,3 +65,39 @@ test('wan: original uid and six link panels preserved; standard variables; serie
   assert.ok(!/sumSeries|"sum"[^]*Bits/.test(text.replace(/reducers":\["sum"\]/g, '')), 'bandwidth must not be summed across interfaces');
   assert.ok(!/itemids|SITE-A|STC|MOBILY/.test(text), 'new section carries no item ids or device names');
 });
+
+const NETFLOW = ['netflow-overview', 'netflow-top-talkers', 'netflow-asn', 'netflow-exporters', 'netflow-health'];
+test('netflow: every dashboard uses the standard selectors and the nav link that carries them', () => {
+  for (const uid of NETFLOW) {
+    const d = rd(`dashboards/netflow/${uid}.json`);
+    const names = d.templating.list.map((v) => v.name);
+    for (const n of ['site', 'device_group', 'device', 'exporter']) assert.ok(names.includes(n), `${uid} ${n}`);
+    assert.ok(!names.includes('iface'), `${uid} still uses the old iface variable`);
+    assert.ok(d.links.some((l) => l.type === 'dashboards' && l.includeVars && l.keepTime), uid);
+  }
+  assert.deepEqual(['site', 'device_group', 'device'].map((n) => rd('dashboards/netflow/netflow-overview.json').templating.list.find((v) => v.name === n).datasource.uid), ['zabbix-lab', 'zabbix-lab', 'zabbix-lab']);
+});
+
+test('netflow: configured devices stay selectable and status never claims DOWN from traffic', () => {
+  const d = rd('dashboards/netflow/netflow-exporters.json');
+  const ex = d.templating.list.find((v) => v.name === 'exporter');
+  assert.match(ex.query, /arrayJoin\(\[\$\{device:singlequote\}\]\)/, 'effective exporter set starts from the Zabbix inventory');
+  const txt = JSON.stringify(d.panels.map((p) => p.targets).filter(Boolean));
+  assert.ok(txt.includes("'NO DATA'") && txt.includes('NOT IN INVENTORY') && txt.includes("'ACTIVE'") && txt.includes('IDLE / NO RECENT FLOWS'));
+  assert.ok(!/'DOWN'|"DOWN"/.test(JSON.stringify(d)), 'no DOWN state on NetFlow dashboards');
+});
+
+test('netflow health: no 57-year flow age, no phantom FLOWING, platform tiles ignore the selection', () => {
+  for (const uid of NETFLOW) {
+    const d = rd(`dashboards/netflow/${uid}.json`);
+    for (const p of d.panels.filter((x) => /LAST REAL FLOW/.test(x.title))) assert.match(p.targets[0].rawSql, /if\(count\(\) = 0, NULL, dateDiff/, `${uid}: last flow age must be NULL without flows`);
+    assert.ok(!JSON.stringify(d).includes('FLOWING'), `${uid}: misleading FLOWING state`);
+  }
+  const h = rd('dashboards/netflow/netflow-health.json');
+  for (const t of ['CLICKHOUSE', 'CLICKHOUSE MEMORY', 'DISK UTILIZATION', 'QUERY HEALTH (p95)']) {
+    const sql = h.panels.find((p) => p.title === t).targets[0].rawSql;
+    assert.ok(!/\$\{(site|device|exporter|device_group)/.test(sql), `${t} must be independent of the selection`);
+  }
+  const col = h.panels.find((p) => p.title === 'FLOW COLLECTION');
+  assert.ok(!JSON.stringify(col.fieldConfig).includes('"red"'), 'no red for "no traffic"');
+});

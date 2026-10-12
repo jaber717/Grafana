@@ -1,128 +1,318 @@
 {
+  "uid": "netflow-health",
+  "title": "NetFlow | Platform Health",
+  "description": "Platform (ClickHouse), flow collection and exporters are shown separately. Platform tiles ignore the selection; collector and exporter tiles follow the site / device selection. No traffic is \"no data\", not an outage. Container state (inlet/outlet/Kafka) is available only via status.sh.",
+  "tags": [
+    "netflow",
+    "netops"
+  ],
+  "timezone": "browser",
+  "editable": true,
+  "graphTooltip": 1,
+  "schemaVersion": 39,
+  "refresh": "30s",
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "30s",
+      "1m",
+      "5m",
+      "15m"
+    ]
+  },
+  "templating": {
+    "list": [
+      {
+        "type": "custom",
+        "name": "scope",
+        "label": "Data scope",
+        "query": "Real only : real,Demo only : demo,Real + demo : all",
+        "description": "Real = synthetic demo exporter excluded (default).",
+        "hide": 0,
+        "current": {
+          "text": "Real only",
+          "value": "real",
+          "selected": true
+        },
+        "options": [
+          {
+            "text": "Real only",
+            "value": "real",
+            "selected": true
+          },
+          {
+            "text": "Demo only",
+            "value": "demo",
+            "selected": false
+          },
+          {
+            "text": "Real + demo",
+            "value": "all",
+            "selected": false
+          }
+        ]
+      },
+      {
+        "type": "query",
+        "name": "site",
+        "label": "Site",
+        "description": "Site = Zabbix host group \"Site/<name>\". All = every monitored host, including hosts without a site group.",
+        "datasource": {
+          "type": "alexanderzobnin-zabbix-datasource",
+          "uid": "zabbix-lab"
+        },
+        "query": {
+          "queryType": "group",
+          "group": "/^Site\\/.*/"
+        },
+        "definition": "{\"queryType\":\"group\",\"group\":\"/^Site\\\\/.*/\"}",
+        "refresh": 1,
+        "sort": 1,
+        "multi": false,
+        "includeAll": true,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": [],
+        "skipUrlSync": false,
+        "regex": "/^(?<value>Site\\/(?<text>.*))$/",
+        "allValue": ".*"
+      },
+      {
+        "type": "query",
+        "name": "device_group",
+        "label": "Device type",
+        "description": "Device type = Zabbix host group \"Type/<name>\" (router, switch, ...).",
+        "datasource": {
+          "type": "alexanderzobnin-zabbix-datasource",
+          "uid": "zabbix-lab"
+        },
+        "query": {
+          "queryType": "group",
+          "group": "/^Type\\/.*/"
+        },
+        "definition": "{\"queryType\":\"group\",\"group\":\"/^Type\\\\/.*/\"}",
+        "refresh": 1,
+        "sort": 1,
+        "multi": false,
+        "includeAll": true,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": [],
+        "skipUrlSync": false,
+        "regex": "/^(?<value>Type\\/(?<text>.*))$/",
+        "allValue": ".*"
+      },
+      {
+        "type": "query",
+        "name": "site_hosts",
+        "label": "Hosts of the site",
+        "description": "internal helper",
+        "datasource": {
+          "type": "alexanderzobnin-zabbix-datasource",
+          "uid": "zabbix-lab"
+        },
+        "query": {
+          "queryType": "host",
+          "group": "$site",
+          "host": "/.*/"
+        },
+        "definition": "{\"queryType\":\"host\",\"group\":\"$site\",\"host\":\"/.*/\"}",
+        "refresh": 1,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": [],
+        "skipUrlSync": false,
+        "hide": 2
+      },
+      {
+        "type": "query",
+        "name": "device",
+        "label": "Device",
+        "description": "Devices of the selected site and type. Pick one or several to compare. New Zabbix hosts appear here automatically.",
+        "datasource": {
+          "type": "alexanderzobnin-zabbix-datasource",
+          "uid": "zabbix-lab"
+        },
+        "query": {
+          "queryType": "host",
+          "group": "$device_group",
+          "host": "$site_hosts"
+        },
+        "definition": "{\"queryType\":\"host\",\"group\":\"$device_group\",\"host\":\"$site_hosts\"}",
+        "refresh": 1,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": [],
+        "skipUrlSync": false
+      },
+      {
+        "type": "query",
+        "name": "exporter",
+        "label": "Exporter",
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "netflow-clickhouse"
+        },
+        "query": "SELECT arrayJoin([${device:singlequote}]) AS e UNION DISTINCT SELECT DISTINCT ExporterName AS e FROM default.flows_1h0m0s WHERE TimeReceived > now() - INTERVAL 30 DAY AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') AND position('${site:csv}', '.*') > 0 AND position('${device_group:csv}', '.*') > 0 AND arraySort([${device:singlequote}]) = arraySort([${site_hosts:singlequote}]) ORDER BY 1",
+        "definition": "SELECT arrayJoin([${device:singlequote}]) AS e UNION DISTINCT SELECT DISTINCT ExporterName AS e FROM default.flows_1h0m0s WHERE TimeReceived > now() - INTERVAL 30 DAY AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') AND position('${site:csv}', '.*') > 0 AND position('${device_group:csv}', '.*') > 0 AND arraySort([${device:singlequote}]) = arraySort([${site_hosts:singlequote}]) ORDER BY 1",
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "current": {
+          "text": "All",
+          "value": "$__all",
+          "selected": true
+        },
+        "hide": 2
+      }
+    ]
+  },
   "annotations": {
     "list": []
   },
-  "description": "Pipeline freshness, ClickHouse health, storage growth and Grafana query cost. Container state (inlet/outlet/Kafka) is available only via status.sh.",
-  "editable": true,
-  "graphTooltip": 1,
-  "id": null,
-  "links": [
-    {
-      "asDropdown": false,
-      "icon": "external link",
-      "includeVars": true,
-      "keepTime": true,
-      "tags": [
-        "netflow"
-      ],
-      "title": "NetFlow",
-      "type": "dashboards"
-    }
-  ],
   "panels": [
     {
+      "id": 1,
+      "type": "stat",
+      "title": "FLOW COLLECTION",
       "datasource": {
         "type": "grafana-clickhouse-datasource",
         "uid": "netflow-clickhouse"
       },
-      "description": "FLOWING: a flow arrived in the last 5 minutes (exporters → inlet → Kafka → outlet → ClickHouse all working). IDLE: flows exist but none recently — can be an idle lab, not a failure. Container-level state: status.sh.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "fixedColor": "#C7D0DC",
-            "mode": "thresholds"
-          },
-          "mappings": [
-            {
-              "options": {
-                "0": {
-                  "color": "gray",
-                  "index": 2,
-                  "text": "UNKNOWN"
-                },
-                "1": {
-                  "color": "orange",
-                  "index": 1,
-                  "text": "IDLE / NO RECENT FLOWS"
-                },
-                "2": {
-                  "color": "green",
-                  "index": 0,
-                  "text": "FLOWING"
-                }
-              },
-              "type": "value"
-            }
-          ],
-          "noValue": "UNKNOWN",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "gray",
-                "value": null
-              }
-            ]
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
       "gridPos": {
-        "h": 3,
-        "w": 4,
         "x": 0,
-        "y": 0
-      },
-      "id": 1,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "text": {
-          "titleSize": 11,
-          "valueSize": 18
-        },
-        "textMode": "value"
+        "y": 0,
+        "w": 4,
+        "h": 3
       },
       "targets": [
         {
+          "refId": "A",
           "datasource": {
             "type": "grafana-clickhouse-datasource",
             "uid": "netflow-clickhouse"
           },
           "editorType": "sql",
           "format": 1,
-          "rawSql": "SELECT multiIf(age IS NULL, 0, age <= 300, 2, 1) FROM (SELECT min(dateDiff('second', TimeReceived, now())) AS age FROM default.flows WHERE TimeReceived > now() - INTERVAL 24 HOUR AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all'))",
-          "refId": "A"
+          "rawSql": "SELECT multiIf(count() = 0, 0, max(TimeReceived) > now() - INTERVAL 5 MINUTE, 2, 1) FROM default.flows WHERE TimeReceived > now() - INTERVAL 24 HOUR AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all')"
         }
       ],
-      "title": "PIPELINE",
-      "type": "stat"
+      "description": "RECEIVING FLOWS: a flow record arrived in the last 5 minutes. IDLE: flows exist in the last 24 h but none recently. NO FLOW DATA: nothing in 24 h (expected in a lab without traffic, not an outage). Container-level state of inlet / outlet / Kafka: status.sh.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "NO FLOW DATA",
+                  "color": "#8A94A3",
+                  "index": 2
+                },
+                "1": {
+                  "text": "IDLE / NO RECENT FLOWS",
+                  "color": "#5B7A99",
+                  "index": 1
+                },
+                "2": {
+                  "text": "RECEIVING FLOWS",
+                  "color": "green",
+                  "index": 0
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "thresholds",
+            "fixedColor": "#C7D0DC"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#8A94A3",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "UNKNOWN"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "value",
+        "orientation": "auto",
+        "text": {
+          "valueSize": 18,
+          "titleSize": 11
+        }
+      }
     },
     {
+      "id": 2,
+      "type": "stat",
+      "title": "LAST REAL FLOW AGE",
       "datasource": {
         "type": "grafana-clickhouse-datasource",
         "uid": "netflow-clickhouse"
       },
-      "description": "Seconds since the newest flow record (raw table, last 24 h, same data scope as every other panel).",
+      "gridPos": {
+        "x": 4,
+        "y": 0,
+        "w": 4,
+        "h": 3
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "netflow-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "rawSql": "SELECT if(count() = 0, NULL, dateDiff('second', max(TimeReceived), now())) AS age FROM default.flows WHERE TimeReceived > now() - INTERVAL 24 HOUR AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all')"
+        }
+      ],
+      "description": "Time since the newest flow record in the selected data scope (raw table, last 24 h). \"No flows in 24 h\" = nothing was received; it does not say a device is down.",
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "fixedColor": "#C7D0DC",
-            "mode": "thresholds"
-          },
+          "unit": "s",
           "decimals": 0,
           "mappings": [],
-          "noValue": "none in 24 h",
+          "color": {
+            "mode": "thresholds",
+            "fixedColor": "#C7D0DC"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -131,141 +321,148 @@
                 "value": null
               },
               {
-                "color": "orange",
+                "color": "#5B7A99",
                 "value": 300
-              },
-              {
-                "color": "red",
-                "value": 3600
               }
             ]
           },
-          "unit": "s"
+          "noValue": "No flows in 24 h"
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 3,
-        "w": 4,
-        "x": 4,
-        "y": 0
-      },
-      "id": 2,
       "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
         "reduceOptions": {
+          "values": false,
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
-          "values": false
+          "fields": ""
         },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "auto",
+        "orientation": "auto",
         "text": {
           "titleSize": 11,
           "valueSize": 26
-        },
-        "textMode": "auto"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "CLICKHOUSE",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "netflow-clickhouse"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 4,
+        "h": 3
       },
       "targets": [
         {
+          "refId": "A",
           "datasource": {
             "type": "grafana-clickhouse-datasource",
             "uid": "netflow-clickhouse"
           },
           "editorType": "sql",
           "format": 1,
-          "rawSql": "SELECT dateDiff('second', max(TimeReceived), now()) AS age FROM default.flows WHERE TimeReceived > now() - INTERVAL 24 HOUR AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all')",
-          "refId": "A"
+          "rawSql": "SELECT 1"
         }
       ],
-      "title": "LAST REAL FLOW AGE",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "netflow-clickhouse"
-      },
-      "description": "Exporters that sent flows in the last 5 minutes / exporters seen in the last 7 days.",
+      "description": "The datasource answers queries. Platform health, independent of the selection and of traffic.",
       "fieldConfig": {
         "defaults": {
+          "unit": "none",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "ONLINE",
+                  "color": "green",
+                  "index": 0
+                }
+              }
+            }
+          ],
           "color": {
-            "fixedColor": "#C7D0DC",
-            "mode": "fixed"
+            "mode": "thresholds",
+            "fixedColor": "#C7D0DC"
           },
-          "mappings": [],
-          "noValue": "0 / 0",
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "blue",
+                "color": "green",
                 "value": null
               }
             ]
           },
-          "unit": "none"
+          "noValue": "UNKNOWN"
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 3,
-        "w": 4,
-        "x": 8,
-        "y": 0
-      },
-      "id": 3,
       "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
         "reduceOptions": {
+          "values": false,
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
-          "values": false
+          "fields": ""
         },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "value",
+        "orientation": "auto",
         "text": {
-          "titleSize": 11,
-          "valueSize": 26
-        },
-        "textMode": "value"
+          "valueSize": 18,
+          "titleSize": 11
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "CLICKHOUSE MEMORY",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "netflow-clickhouse"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 4,
+        "h": 3
       },
       "targets": [
         {
+          "refId": "A",
           "datasource": {
             "type": "grafana-clickhouse-datasource",
             "uid": "netflow-clickhouse"
           },
           "editorType": "sql",
           "format": 1,
-          "rawSql": "SELECT concat(toString(uniqExactIf(ExporterAddress, TimeReceived > now() - INTERVAL 5 MINUTE)), ' / ', toString(uniqExact(ExporterAddress))) AS v\n   FROM default.flows_1m0s WHERE TimeReceived > now() - INTERVAL 7 DAY AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all')",
-          "refId": "A"
+          "rawSql": "SELECT value FROM system.asynchronous_metrics WHERE metric = 'MemoryResident'"
         }
       ],
-      "title": "ACTIVE EXPORTERS",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "netflow-clickhouse"
-      },
-      "description": "Resident memory; container cap 3 GiB.",
+      "description": "Resident memory; container cap 3 GiB. Independent of the selection.",
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "fixedColor": "#C7D0DC",
-            "mode": "thresholds"
-          },
+          "unit": "bytes",
           "decimals": 1,
           "mappings": [],
-          "noValue": "—",
+          "color": {
+            "mode": "thresholds",
+            "fixedColor": "#C7D0DC"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -283,65 +480,65 @@
               }
             ]
           },
-          "unit": "bytes"
+          "noValue": "—"
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 3,
-        "w": 4,
-        "x": 12,
-        "y": 0
-      },
-      "id": 4,
       "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
         "reduceOptions": {
+          "values": false,
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
-          "values": false
+          "fields": ""
         },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "auto",
+        "orientation": "auto",
         "text": {
           "titleSize": 11,
           "valueSize": 26
-        },
-        "textMode": "auto"
+        }
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "DISK UTILIZATION",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "netflow-clickhouse"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 4,
+        "h": 3
       },
       "targets": [
         {
+          "refId": "A",
           "datasource": {
             "type": "grafana-clickhouse-datasource",
             "uid": "netflow-clickhouse"
           },
           "editorType": "sql",
           "format": 1,
-          "rawSql": "SELECT value FROM system.asynchronous_metrics WHERE metric = 'MemoryResident'",
-          "refId": "A"
+          "rawSql": "SELECT round(100 * (total_space - free_space) / total_space, 1) FROM system.disks WHERE name = 'default'"
         }
       ],
-      "title": "CLICKHOUSE MEMORY",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "netflow-clickhouse"
-      },
-      "description": "Data disk. Ingestion is frozen by disk-guard at 95 %.",
+      "description": "Data disk. Ingestion is frozen by disk-guard at 95 %. Independent of the selection.",
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "fixedColor": "#C7D0DC",
-            "mode": "thresholds"
-          },
+          "unit": "percent",
           "decimals": 1,
           "mappings": [],
-          "noValue": "—",
+          "color": {
+            "mode": "thresholds",
+            "fixedColor": "#C7D0DC"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -359,65 +556,65 @@
               }
             ]
           },
-          "unit": "percent"
+          "noValue": "—"
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 3,
-        "w": 4,
-        "x": 16,
-        "y": 0
-      },
-      "id": 5,
       "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
         "reduceOptions": {
+          "values": false,
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
-          "values": false
+          "fields": ""
         },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "auto",
+        "orientation": "auto",
         "text": {
           "titleSize": 11,
           "valueSize": 26
-        },
-        "textMode": "auto"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "QUERY HEALTH (p95)",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "netflow-clickhouse"
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 0,
+        "w": 4,
+        "h": 3
       },
       "targets": [
         {
+          "refId": "A",
           "datasource": {
             "type": "grafana-clickhouse-datasource",
             "uid": "netflow-clickhouse"
           },
           "editorType": "sql",
           "format": 1,
-          "rawSql": "SELECT round(100 * (total_space - free_space) / total_space, 1) FROM system.disks WHERE name = 'default'",
-          "refId": "A"
+          "rawSql": "SELECT round(quantile(0.95)(query_duration_ms)) FROM system.query_log WHERE type = 'QueryFinish' AND user = 'grafana_ro' AND event_time > now() - INTERVAL 15 MINUTE"
         }
       ],
-      "title": "DISK UTILIZATION",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "netflow-clickhouse"
-      },
-      "description": "p95 duration of Grafana queries in the last 15 minutes (limit is 30 s per query).",
+      "description": "p95 duration of Grafana queries in the last 15 minutes (limit is 30 s per query). Independent of the selection.",
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "fixedColor": "#C7D0DC",
-            "mode": "thresholds"
-          },
+          "unit": "ms",
           "decimals": 0,
           "mappings": [],
-          "noValue": "no queries",
+          "color": {
+            "mode": "thresholds",
+            "fixedColor": "#C7D0DC"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -435,192 +632,612 @@
               }
             ]
           },
-          "unit": "ms"
+          "noValue": "no queries"
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 3,
-        "w": 4,
-        "x": 20,
-        "y": 0
-      },
-      "id": 6,
       "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
         "reduceOptions": {
+          "values": false,
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
-          "values": false
+          "fields": ""
         },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "auto",
+        "orientation": "auto",
         "text": {
           "titleSize": 11,
           "valueSize": 26
-        },
-        "textMode": "auto"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "type": "stat",
+      "title": "CONFIGURED EXPORTERS",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "netflow-clickhouse"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 3,
+        "w": 4,
+        "h": 3
       },
       "targets": [
         {
+          "refId": "A",
           "datasource": {
             "type": "grafana-clickhouse-datasource",
             "uid": "netflow-clickhouse"
           },
           "editorType": "sql",
           "format": 1,
-          "rawSql": "SELECT round(quantile(0.95)(query_duration_ms)) FROM system.query_log WHERE type = 'QueryFinish' AND user = 'grafana_ro' AND event_time > now() - INTERVAL 15 MINUTE",
-          "refId": "A"
+          "rawSql": "SELECT countIf(Inventory = 'Configured') FROM (SELECT l.exporter AS Exporter,\n  multiIf(r.ex = '', 'NO DATA', x.ex != '', 'ACTIVE', 'IDLE / NO RECENT FLOWS') AS Status,\n  if(has([${device:singlequote}], l.exporter), 'Configured', 'NOT IN INVENTORY') AS Inventory,\n  if(x.ex != '', x.bps, 0) AS Traffic, if(x.ex != '', x.fps, 0) AS `Flows/s`, if(r.ex = '', NULL, if(x.ex != '', x.age, r.age)) AS `Last flow`\n  FROM (SELECT arrayJoin([${exporter:singlequote}]) AS exporter) AS l\n  LEFT JOIN (SELECT ExporterName AS ex, dateDiff('second', max(TimeReceived), now()) AS age FROM default.flows_1m0s WHERE TimeReceived > now() - INTERVAL 7 DAY AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') GROUP BY ex) AS r ON l.exporter = r.ex\n  LEFT JOIN (SELECT ExporterName AS ex, sum(Bytes*SamplingRate)*8/300 AS bps, count()/300 AS fps, dateDiff('second', max(TimeReceived), now()) AS age FROM default.flows WHERE TimeReceived > now() - INTERVAL 5 MINUTE AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') GROUP BY ex) AS x ON l.exporter = x.ex)"
         }
       ],
-      "title": "QUERY HEALTH (p95)",
-      "type": "stat"
+      "description": "Devices in the Zabbix inventory for the selected site / device type / device.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "mappings": [],
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#C7D0DC"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "auto",
+        "orientation": "auto",
+        "text": {
+          "titleSize": 11,
+          "valueSize": 26
+        }
+      }
     },
     {
+      "id": 8,
+      "type": "stat",
+      "title": "OBSERVED (7 d)",
       "datasource": {
         "type": "grafana-clickhouse-datasource",
         "uid": "netflow-clickhouse"
       },
+      "gridPos": {
+        "x": 4,
+        "y": 3,
+        "w": 4,
+        "h": 3
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "netflow-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "rawSql": "SELECT countIf(Status != 'NO DATA') FROM (SELECT l.exporter AS Exporter,\n  multiIf(r.ex = '', 'NO DATA', x.ex != '', 'ACTIVE', 'IDLE / NO RECENT FLOWS') AS Status,\n  if(has([${device:singlequote}], l.exporter), 'Configured', 'NOT IN INVENTORY') AS Inventory,\n  if(x.ex != '', x.bps, 0) AS Traffic, if(x.ex != '', x.fps, 0) AS `Flows/s`, if(r.ex = '', NULL, if(x.ex != '', x.age, r.age)) AS `Last flow`\n  FROM (SELECT arrayJoin([${exporter:singlequote}]) AS exporter) AS l\n  LEFT JOIN (SELECT ExporterName AS ex, dateDiff('second', max(TimeReceived), now()) AS age FROM default.flows_1m0s WHERE TimeReceived > now() - INTERVAL 7 DAY AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') GROUP BY ex) AS r ON l.exporter = r.ex\n  LEFT JOIN (SELECT ExporterName AS ex, sum(Bytes*SamplingRate)*8/300 AS bps, count()/300 AS fps, dateDiff('second', max(TimeReceived), now()) AS age FROM default.flows WHERE TimeReceived > now() - INTERVAL 5 MINUTE AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') GROUP BY ex) AS x ON l.exporter = x.ex)"
+        }
+      ],
+      "description": "Exporters that sent at least one flow in the last 7 days.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "mappings": [],
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#C7D0DC"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "auto",
+        "orientation": "auto",
+        "text": {
+          "titleSize": 11,
+          "valueSize": 26
+        }
+      }
+    },
+    {
+      "id": 9,
+      "type": "stat",
+      "title": "ACTIVE (5 min)",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "netflow-clickhouse"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 3,
+        "w": 4,
+        "h": 3
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "netflow-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "rawSql": "SELECT countIf(Status = 'ACTIVE') FROM (SELECT l.exporter AS Exporter,\n  multiIf(r.ex = '', 'NO DATA', x.ex != '', 'ACTIVE', 'IDLE / NO RECENT FLOWS') AS Status,\n  if(has([${device:singlequote}], l.exporter), 'Configured', 'NOT IN INVENTORY') AS Inventory,\n  if(x.ex != '', x.bps, 0) AS Traffic, if(x.ex != '', x.fps, 0) AS `Flows/s`, if(r.ex = '', NULL, if(x.ex != '', x.age, r.age)) AS `Last flow`\n  FROM (SELECT arrayJoin([${exporter:singlequote}]) AS exporter) AS l\n  LEFT JOIN (SELECT ExporterName AS ex, dateDiff('second', max(TimeReceived), now()) AS age FROM default.flows_1m0s WHERE TimeReceived > now() - INTERVAL 7 DAY AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') GROUP BY ex) AS r ON l.exporter = r.ex\n  LEFT JOIN (SELECT ExporterName AS ex, sum(Bytes*SamplingRate)*8/300 AS bps, count()/300 AS fps, dateDiff('second', max(TimeReceived), now()) AS age FROM default.flows WHERE TimeReceived > now() - INTERVAL 5 MINUTE AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') GROUP BY ex) AS x ON l.exporter = x.ex)"
+        }
+      ],
+      "description": "Exporters with flows in the last 5 minutes.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "mappings": [],
+          "color": {
+            "mode": "thresholds",
+            "fixedColor": "#C7D0DC"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#8A94A3",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "auto",
+        "orientation": "auto",
+        "text": {
+          "titleSize": 11,
+          "valueSize": 26
+        }
+      }
+    },
+    {
+      "id": 10,
+      "type": "stat",
+      "title": "IDLE",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "netflow-clickhouse"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 3,
+        "w": 4,
+        "h": 3
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "netflow-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "rawSql": "SELECT countIf(Status = 'IDLE / NO RECENT FLOWS') FROM (SELECT l.exporter AS Exporter,\n  multiIf(r.ex = '', 'NO DATA', x.ex != '', 'ACTIVE', 'IDLE / NO RECENT FLOWS') AS Status,\n  if(has([${device:singlequote}], l.exporter), 'Configured', 'NOT IN INVENTORY') AS Inventory,\n  if(x.ex != '', x.bps, 0) AS Traffic, if(x.ex != '', x.fps, 0) AS `Flows/s`, if(r.ex = '', NULL, if(x.ex != '', x.age, r.age)) AS `Last flow`\n  FROM (SELECT arrayJoin([${exporter:singlequote}]) AS exporter) AS l\n  LEFT JOIN (SELECT ExporterName AS ex, dateDiff('second', max(TimeReceived), now()) AS age FROM default.flows_1m0s WHERE TimeReceived > now() - INTERVAL 7 DAY AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') GROUP BY ex) AS r ON l.exporter = r.ex\n  LEFT JOIN (SELECT ExporterName AS ex, sum(Bytes*SamplingRate)*8/300 AS bps, count()/300 AS fps, dateDiff('second', max(TimeReceived), now()) AS age FROM default.flows WHERE TimeReceived > now() - INTERVAL 5 MINUTE AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') GROUP BY ex) AS x ON l.exporter = x.ex)"
+        }
+      ],
+      "description": "Seen in the last 7 days, quiet for 5 minutes. Not proof of failure.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "mappings": [],
+          "color": {
+            "mode": "thresholds",
+            "fixedColor": "#C7D0DC"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#8A94A3",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "auto",
+        "orientation": "auto",
+        "text": {
+          "titleSize": 11,
+          "valueSize": 26
+        }
+      }
+    },
+    {
+      "id": 11,
+      "type": "stat",
+      "title": "NO DATA",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "netflow-clickhouse"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 3,
+        "w": 4,
+        "h": 3
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "netflow-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "rawSql": "SELECT countIf(Status = 'NO DATA') FROM (SELECT l.exporter AS Exporter,\n  multiIf(r.ex = '', 'NO DATA', x.ex != '', 'ACTIVE', 'IDLE / NO RECENT FLOWS') AS Status,\n  if(has([${device:singlequote}], l.exporter), 'Configured', 'NOT IN INVENTORY') AS Inventory,\n  if(x.ex != '', x.bps, 0) AS Traffic, if(x.ex != '', x.fps, 0) AS `Flows/s`, if(r.ex = '', NULL, if(x.ex != '', x.age, r.age)) AS `Last flow`\n  FROM (SELECT arrayJoin([${exporter:singlequote}]) AS exporter) AS l\n  LEFT JOIN (SELECT ExporterName AS ex, dateDiff('second', max(TimeReceived), now()) AS age FROM default.flows_1m0s WHERE TimeReceived > now() - INTERVAL 7 DAY AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') GROUP BY ex) AS r ON l.exporter = r.ex\n  LEFT JOIN (SELECT ExporterName AS ex, sum(Bytes*SamplingRate)*8/300 AS bps, count()/300 AS fps, dateDiff('second', max(TimeReceived), now()) AS age FROM default.flows WHERE TimeReceived > now() - INTERVAL 5 MINUTE AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') GROUP BY ex) AS x ON l.exporter = x.ex)"
+        }
+      ],
+      "description": "Configured devices that never sent a flow in 7 days. Their availability is on Device Health.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "mappings": [],
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#8A94A3"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "auto",
+        "orientation": "auto",
+        "text": {
+          "titleSize": 11,
+          "valueSize": 26
+        }
+      }
+    },
+    {
+      "id": 12,
+      "type": "stat",
+      "title": "NOT IN INVENTORY",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "netflow-clickhouse"
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 3,
+        "w": 4,
+        "h": 3
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "netflow-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "rawSql": "SELECT countIf(Inventory = 'NOT IN INVENTORY') FROM (SELECT l.exporter AS Exporter,\n  multiIf(r.ex = '', 'NO DATA', x.ex != '', 'ACTIVE', 'IDLE / NO RECENT FLOWS') AS Status,\n  if(has([${device:singlequote}], l.exporter), 'Configured', 'NOT IN INVENTORY') AS Inventory,\n  if(x.ex != '', x.bps, 0) AS Traffic, if(x.ex != '', x.fps, 0) AS `Flows/s`, if(r.ex = '', NULL, if(x.ex != '', x.age, r.age)) AS `Last flow`\n  FROM (SELECT arrayJoin([${exporter:singlequote}]) AS exporter) AS l\n  LEFT JOIN (SELECT ExporterName AS ex, dateDiff('second', max(TimeReceived), now()) AS age FROM default.flows_1m0s WHERE TimeReceived > now() - INTERVAL 7 DAY AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') GROUP BY ex) AS r ON l.exporter = r.ex\n  LEFT JOIN (SELECT ExporterName AS ex, sum(Bytes*SamplingRate)*8/300 AS bps, count()/300 AS fps, dateDiff('second', max(TimeReceived), now()) AS age FROM default.flows WHERE TimeReceived > now() - INTERVAL 5 MINUTE AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') GROUP BY ex) AS x ON l.exporter = x.ex)"
+        }
+      ],
+      "description": "Sending flows but not a Zabbix host.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "mappings": [],
+          "color": {
+            "mode": "thresholds",
+            "fixedColor": "#C7D0DC"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#8A94A3",
+                "value": null
+              },
+              {
+                "color": "#5B9BD5",
+                "value": 1
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "auto",
+        "orientation": "auto",
+        "text": {
+          "titleSize": 11,
+          "valueSize": 26
+        }
+      }
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Ingestion rate",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "netflow-clickhouse"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 6,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "netflow-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "rawSql": "SELECT toStartOfInterval(TimeReceived, INTERVAL greatest(60, $__interval_s) SECOND) AS time, count()/greatest(60, $__interval_s) AS fps\n     FROM default.flows WHERE TimeReceived >= greatest($__fromTime, now() - INTERVAL 24 HOUR) AND TimeReceived <= $__toTime AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') GROUP BY time ORDER BY time"
+        }
+      ],
       "description": "Flow records per second (raw table, latest ≤24 h).",
       "fieldConfig": {
         "defaults": {
+          "unit": "suffix: flows/s",
+          "min": 0,
+          "decimals": 2,
           "color": {
             "mode": "continuous-BlPu"
           },
           "custom": {
-            "axisBorderShow": false,
             "drawStyle": "line",
-            "fillOpacity": 18,
             "lineWidth": 1.5,
+            "fillOpacity": 18,
             "showPoints": "never",
             "spanNulls": false,
+            "axisBorderShow": false,
             "stacking": {
-              "group": "A",
-              "mode": "none"
+              "mode": "none",
+              "group": "A"
             }
           },
-          "decimals": 2,
-          "min": 0,
-          "noValue": "No flows in the selected range",
-          "unit": "suffix: flows/s"
+          "noValue": "No flows in the selected range"
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 7,
-        "w": 12,
-        "x": 0,
-        "y": 3
-      },
-      "id": 7,
       "options": {
         "legend": {
+          "displayMode": "table",
+          "placement": "right",
           "calcs": [
             "lastNotNull",
             "mean",
             "max"
           ],
-          "displayMode": "table",
-          "placement": "right",
           "showLegend": true
         },
         "tooltip": {
           "mode": "multi",
           "sort": "desc"
         }
+      }
+    },
+    {
+      "id": 14,
+      "type": "timeseries",
+      "title": "New flow data per hour",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "netflow-clickhouse"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 6,
+        "w": 12,
+        "h": 7
       },
       "targets": [
         {
+          "refId": "A",
           "datasource": {
             "type": "grafana-clickhouse-datasource",
             "uid": "netflow-clickhouse"
           },
           "editorType": "sql",
           "format": 0,
-          "rawSql": "SELECT toStartOfInterval(TimeReceived, INTERVAL greatest(60, $__interval_s) SECOND) AS time, count()/greatest(60, $__interval_s) AS fps\n     FROM default.flows WHERE TimeReceived >= greatest($__fromTime, now() - INTERVAL 24 HOUR) AND TimeReceived <= $__toTime AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') GROUP BY time ORDER BY time",
-          "refId": "A"
+          "rawSql": "SELECT toStartOfHour(modification_time) AS time, sum(bytes_on_disk) AS bytes FROM system.parts\n     WHERE active AND database = 'default' AND table = 'flows' AND $__timeFilter(modification_time) GROUP BY time ORDER BY time"
         }
       ],
-      "title": "Ingestion rate",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "netflow-clickhouse"
-      },
       "description": "Approximation from part modification time (merges rewrite parts).",
       "fieldConfig": {
         "defaults": {
+          "unit": "bytes",
+          "min": 0,
+          "decimals": 1,
           "color": {
             "mode": "continuous-BlPu"
           },
           "custom": {
-            "axisBorderShow": false,
             "drawStyle": "line",
-            "fillOpacity": 18,
             "lineWidth": 1.5,
+            "fillOpacity": 18,
             "showPoints": "never",
             "spanNulls": false,
+            "axisBorderShow": false,
             "stacking": {
-              "group": "A",
-              "mode": "none"
+              "mode": "none",
+              "group": "A"
             }
           },
-          "decimals": 1,
-          "min": 0,
-          "noValue": "No new flow data in the selected range",
-          "unit": "bytes"
+          "noValue": "No new flow data in the selected range"
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 7,
-        "w": 12,
-        "x": 12,
-        "y": 3
-      },
-      "id": 8,
       "options": {
         "legend": {
+          "displayMode": "table",
+          "placement": "right",
           "calcs": [
             "lastNotNull",
             "mean",
             "max"
           ],
-          "displayMode": "table",
-          "placement": "right",
           "showLegend": true
         },
         "tooltip": {
           "mode": "multi",
           "sort": "desc"
         }
+      }
+    },
+    {
+      "id": 15,
+      "type": "table",
+      "title": "Exporter freshness",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "netflow-clickhouse"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 13,
+        "w": 10,
+        "h": 7
       },
       "targets": [
         {
+          "refId": "A",
           "datasource": {
             "type": "grafana-clickhouse-datasource",
             "uid": "netflow-clickhouse"
           },
           "editorType": "sql",
-          "format": 0,
-          "rawSql": "SELECT toStartOfHour(modification_time) AS time, sum(bytes_on_disk) AS bytes FROM system.parts\n     WHERE active AND database = 'default' AND table = 'flows' AND $__timeFilter(modification_time) GROUP BY time ORDER BY time",
-          "refId": "A"
+          "format": 1,
+          "rawSql": "SELECT Exporter, Status, Inventory, Traffic, `Flows/s`, `Last flow` FROM (SELECT l.exporter AS Exporter,\n  multiIf(r.ex = '', 'NO DATA', x.ex != '', 'ACTIVE', 'IDLE / NO RECENT FLOWS') AS Status,\n  if(has([${device:singlequote}], l.exporter), 'Configured', 'NOT IN INVENTORY') AS Inventory,\n  if(x.ex != '', x.bps, 0) AS Traffic, if(x.ex != '', x.fps, 0) AS `Flows/s`, if(r.ex = '', NULL, if(x.ex != '', x.age, r.age)) AS `Last flow`\n  FROM (SELECT arrayJoin([${exporter:singlequote}]) AS exporter) AS l\n  LEFT JOIN (SELECT ExporterName AS ex, dateDiff('second', max(TimeReceived), now()) AS age FROM default.flows_1m0s WHERE TimeReceived > now() - INTERVAL 7 DAY AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') GROUP BY ex) AS r ON l.exporter = r.ex\n  LEFT JOIN (SELECT ExporterName AS ex, sum(Bytes*SamplingRate)*8/300 AS bps, count()/300 AS fps, dateDiff('second', max(TimeReceived), now()) AS age FROM default.flows WHERE TimeReceived > now() - INTERVAL 5 MINUTE AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') GROUP BY ex) AS x ON l.exporter = x.ex)\n   ORDER BY multiIf(Status = 'ACTIVE', 0, Status = 'IDLE / NO RECENT FLOWS', 1, 2), Exporter"
         }
       ],
-      "title": "New flow data per hour",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "netflow-clickhouse"
-      },
-      "description": "ACTIVE: flows in the last 5 min. IDLE / NO RECENT FLOWS: seen in the last 7 days but quiet — this is not proof of failure (NetFlow alone cannot prove a router is down). Traffic and flows/s are 5-minute averages.",
+      "description": "Rows = devices configured in Zabbix for the selected scope plus any exporter seen in flows. ACTIVE: flows in the last 5 min. IDLE / NO RECENT FLOWS: seen in the last 7 days but quiet. NO DATA: configured but no flow seen in 7 days — this says nothing about the device being up or down (see Device Health). NOT IN INVENTORY: sends flows but is not a Zabbix host. Traffic and flows/s are 5-minute averages.",
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -631,8 +1248,8 @@
             "filterable": false,
             "inspect": false
           },
-          "links": [],
-          "noValue": "No exporter has sent flows in the last 7 days (for the selected data scope)"
+          "noValue": "—",
+          "links": []
         },
         "overrides": [
           {
@@ -651,24 +1268,62 @@
                 "id": "mappings",
                 "value": [
                   {
+                    "type": "value",
                     "options": {
                       "ACTIVE": {
                         "color": "green",
-                        "index": 0,
-                        "text": "ACTIVE"
+                        "text": "ACTIVE",
+                        "index": 0
                       },
                       "IDLE / NO RECENT FLOWS": {
                         "color": "orange",
-                        "index": 1,
-                        "text": "IDLE / NO RECENT FLOWS"
+                        "text": "IDLE / NO RECENT FLOWS",
+                        "index": 1
                       },
-                      "UNKNOWN": {
-                        "color": "gray",
-                        "index": 2,
-                        "text": "UNKNOWN"
+                      "NO DATA": {
+                        "color": "#8A94A3",
+                        "text": "NO DATA",
+                        "index": 2
                       }
-                    },
-                    "type": "value"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.width",
+                "value": 170
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Inventory"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "Configured": {
+                        "color": "#A9B4C2",
+                        "text": "Configured",
+                        "index": 0
+                      },
+                      "NOT IN INVENTORY": {
+                        "color": "#5B9BD5",
+                        "text": "NOT IN INVENTORY",
+                        "index": 1
+                      }
+                    }
                   }
                 ]
               },
@@ -740,41 +1395,41 @@
           }
         ]
       },
-      "gridPos": {
-        "h": 7,
-        "w": 10,
-        "x": 0,
-        "y": 10
-      },
-      "id": 9,
       "options": {
+        "showHeader": true,
         "cellHeight": "sm",
         "footer": {
           "show": false
         },
-        "showHeader": true,
         "sortBy": []
+      }
+    },
+    {
+      "id": 16,
+      "type": "table",
+      "title": "Data by table",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "netflow-clickhouse"
+      },
+      "gridPos": {
+        "x": 10,
+        "y": 13,
+        "w": 6,
+        "h": 7
       },
       "targets": [
         {
+          "refId": "A",
           "datasource": {
             "type": "grafana-clickhouse-datasource",
             "uid": "netflow-clickhouse"
           },
           "editorType": "sql",
           "format": 1,
-          "rawSql": "SELECT r.exporter AS Exporter,\n          multiIf(isNull(r.age), 'UNKNOWN', ifNull(x.age, r.age) <= 300, 'ACTIVE', 'IDLE / NO RECENT FLOWS') AS Status,\n          ifNull(x.bps, 0) AS Traffic, ifNull(x.fps, 0) AS `Flows/s`, ifNull(x.age, r.age) AS `Last flow`\n   FROM (SELECT ExporterName AS exporter, dateDiff('second', max(TimeReceived), now()) AS age FROM default.flows_1m0s\n         WHERE TimeReceived > now() - INTERVAL 7 DAY AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') GROUP BY exporter) AS r\n   LEFT JOIN (SELECT ExporterName AS exporter, sum(Bytes*SamplingRate)*8/300 AS bps, count()/300 AS fps, dateDiff('second', max(TimeReceived), now()) AS age\n              FROM default.flows WHERE TimeReceived > now() - INTERVAL 5 MINUTE AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') GROUP BY exporter) AS x ON r.exporter = x.exporter\n   ORDER BY `Last flow`",
-          "refId": "A"
+          "rawSql": "SELECT table AS Table, sum(bytes_on_disk) AS Size, round(100*sum(bytes_on_disk)/sum(sum(bytes_on_disk)) OVER (), 1) AS Share FROM system.parts\n     WHERE active AND database = 'default' GROUP BY table ORDER BY Size DESC LIMIT 6"
         }
       ],
-      "title": "Exporter freshness",
-      "type": "table"
-    },
-    {
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "netflow-clickhouse"
-      },
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -785,8 +1440,8 @@
             "filterable": false,
             "inspect": false
           },
-          "links": [],
-          "noValue": "No tables"
+          "noValue": "No tables",
+          "links": []
         },
         "overrides": [
           {
@@ -830,16 +1485,16 @@
               {
                 "id": "custom.cellOptions",
                 "value": {
-                  "mode": "basic",
                   "type": "gauge",
+                  "mode": "basic",
                   "valueDisplayMode": "text"
                 }
               },
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "#6E8CAE",
-                  "mode": "fixed"
+                  "mode": "fixed",
+                  "fixedColor": "#6E8CAE"
                 }
               },
               {
@@ -850,157 +1505,96 @@
           }
         ]
       },
-      "gridPos": {
-        "h": 7,
-        "w": 6,
-        "x": 10,
-        "y": 10
-      },
-      "id": 10,
       "options": {
+        "showHeader": true,
         "cellHeight": "sm",
         "footer": {
           "show": false
         },
-        "showHeader": true,
         "sortBy": []
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "netflow-clickhouse"
-          },
-          "editorType": "sql",
-          "format": 1,
-          "rawSql": "SELECT table AS Table, sum(bytes_on_disk) AS Size, round(100*sum(bytes_on_disk)/sum(sum(bytes_on_disk)) OVER (), 1) AS Share FROM system.parts\n     WHERE active AND database = 'default' GROUP BY table ORDER BY Size DESC LIMIT 6",
-          "refId": "A"
-        }
-      ],
-      "title": "Data by table",
-      "type": "table"
+      }
     },
     {
+      "id": 17,
+      "type": "timeseries",
+      "title": "Grafana query duration",
       "datasource": {
         "type": "grafana-clickhouse-datasource",
         "uid": "netflow-clickhouse"
       },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "continuous-BlPu"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "drawStyle": "line",
-            "fillOpacity": 18,
-            "lineWidth": 1.5,
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            }
-          },
-          "decimals": 0,
-          "min": 0,
-          "noValue": "No Grafana queries in the selected range",
-          "unit": "ms"
-        },
-        "overrides": []
-      },
       "gridPos": {
-        "h": 7,
-        "w": 8,
         "x": 16,
-        "y": 10
-      },
-      "id": 11,
-      "options": {
-        "legend": {
-          "calcs": [
-            "lastNotNull",
-            "mean",
-            "max"
-          ],
-          "displayMode": "table",
-          "placement": "right",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
+        "y": 13,
+        "w": 8,
+        "h": 7
       },
       "targets": [
         {
+          "refId": "A",
           "datasource": {
             "type": "grafana-clickhouse-datasource",
             "uid": "netflow-clickhouse"
           },
           "editorType": "sql",
           "format": 0,
-          "rawSql": "SELECT toStartOfInterval(event_time, INTERVAL 5 MINUTE) AS time, quantile(0.95)(query_duration_ms) AS p95, max(query_duration_ms) AS max\n     FROM system.query_log WHERE type = 'QueryFinish' AND user = 'grafana_ro' AND $__timeFilter(event_time) GROUP BY time ORDER BY time",
-          "refId": "A"
+          "rawSql": "SELECT toStartOfInterval(event_time, INTERVAL 5 MINUTE) AS time, quantile(0.95)(query_duration_ms) AS p95, max(query_duration_ms) AS max\n     FROM system.query_log WHERE type = 'QueryFinish' AND user = 'grafana_ro' AND $__timeFilter(event_time) GROUP BY time ORDER BY time"
         }
       ],
-      "title": "Grafana query duration",
-      "type": "timeseries"
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "min": 0,
+          "decimals": 0,
+          "color": {
+            "mode": "continuous-BlPu"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1.5,
+            "fillOpacity": 18,
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisBorderShow": false,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "noValue": "No Grafana queries in the selected range"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull",
+            "mean",
+            "max"
+          ],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
     }
   ],
-  "refresh": "30s",
-  "schemaVersion": 39,
-  "tags": [
-    "netflow",
-    "netops"
-  ],
-  "templating": {
-    "list": [
-      {
-        "current": {
-          "selected": true,
-          "text": "Real only",
-          "value": "real"
-        },
-        "description": "Real = synthetic demo exporter excluded (default).",
-        "hide": 0,
-        "label": "Data scope",
-        "name": "scope",
-        "options": [
-          {
-            "selected": true,
-            "text": "Real only",
-            "value": "real"
-          },
-          {
-            "selected": false,
-            "text": "Demo only",
-            "value": "demo"
-          },
-          {
-            "selected": false,
-            "text": "Real + demo",
-            "value": "all"
-          }
-        ],
-        "query": "Real only : real,Demo only : demo,Real + demo : all",
-        "type": "custom"
-      }
-    ]
-  },
-  "time": {
-    "from": "now-24h",
-    "to": "now"
-  },
-  "timepicker": {
-    "refresh_intervals": [
-      "30s",
-      "1m",
-      "5m",
-      "15m"
-    ]
-  },
-  "timezone": "browser",
-  "title": "NetFlow | Platform Health",
-  "uid": "netflow-health"
+  "links": [
+    {
+      "type": "dashboards",
+      "title": "NOC dashboards",
+      "tags": [
+        "netops"
+      ],
+      "asDropdown": true,
+      "includeVars": true,
+      "keepTime": true,
+      "icon": "dashboard",
+      "targetBlank": false,
+      "tooltip": "Switch dashboard and keep site, device and time range"
+    }
+  ]
 }

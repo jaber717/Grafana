@@ -3,7 +3,7 @@
 # This proves the generator still reproduces the committed files (compared without the instance-specific id/version).
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
-T=$(mktemp -d); cp tools/netflow/generate.mjs "$T/"; mkdir -p "$T/tools/netflow"; mv "$T/generate.mjs" "$T/tools/netflow/"
+T=$(mktemp -d); mkdir -p "$T/tools/netflow" "$T/tools/monitoring"; cp tools/netflow/generate.mjs "$T/tools/netflow/"; cp tools/monitoring/scope.mjs "$T/tools/monitoring/"
 (cd "$T" && node tools/netflow/generate.mjs >/dev/null) || { echo "[FAIL] generator crashed"; exit 1; }
 FAIL=0
 for f in "$T"/dashboards/netflow/*.json; do

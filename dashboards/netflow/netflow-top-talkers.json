@@ -1,40 +1,393 @@
 {
+  "uid": "netflow-top-talkers",
+  "title": "NetFlow | Top Talkers",
+  "description": "Top IPs, conversations, applications and protocols. Raw-flow panels are capped to the latest 24 h. Use the Source/Dest IP variables (or click an IP) to investigate one host.",
+  "tags": [
+    "netflow",
+    "netops"
+  ],
+  "timezone": "browser",
+  "editable": true,
+  "graphTooltip": 1,
+  "schemaVersion": 39,
+  "refresh": "1m",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "30s",
+      "1m",
+      "5m",
+      "15m"
+    ]
+  },
+  "templating": {
+    "list": [
+      {
+        "type": "custom",
+        "name": "scope",
+        "label": "Data scope",
+        "query": "Real only : real,Demo only : demo,Real + demo : all",
+        "description": "Real = synthetic demo exporter excluded (default).",
+        "hide": 0,
+        "current": {
+          "text": "Real only",
+          "value": "real",
+          "selected": true
+        },
+        "options": [
+          {
+            "text": "Real only",
+            "value": "real",
+            "selected": true
+          },
+          {
+            "text": "Demo only",
+            "value": "demo",
+            "selected": false
+          },
+          {
+            "text": "Real + demo",
+            "value": "all",
+            "selected": false
+          }
+        ]
+      },
+      {
+        "type": "query",
+        "name": "site",
+        "label": "Site",
+        "description": "Site = Zabbix host group \"Site/<name>\". All = every monitored host, including hosts without a site group.",
+        "datasource": {
+          "type": "alexanderzobnin-zabbix-datasource",
+          "uid": "zabbix-lab"
+        },
+        "query": {
+          "queryType": "group",
+          "group": "/^Site\\/.*/"
+        },
+        "definition": "{\"queryType\":\"group\",\"group\":\"/^Site\\\\/.*/\"}",
+        "refresh": 1,
+        "sort": 1,
+        "multi": false,
+        "includeAll": true,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": [],
+        "skipUrlSync": false,
+        "regex": "/^(?<value>Site\\/(?<text>.*))$/",
+        "allValue": ".*"
+      },
+      {
+        "type": "query",
+        "name": "device_group",
+        "label": "Device type",
+        "description": "Device type = Zabbix host group \"Type/<name>\" (router, switch, ...).",
+        "datasource": {
+          "type": "alexanderzobnin-zabbix-datasource",
+          "uid": "zabbix-lab"
+        },
+        "query": {
+          "queryType": "group",
+          "group": "/^Type\\/.*/"
+        },
+        "definition": "{\"queryType\":\"group\",\"group\":\"/^Type\\\\/.*/\"}",
+        "refresh": 1,
+        "sort": 1,
+        "multi": false,
+        "includeAll": true,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": [],
+        "skipUrlSync": false,
+        "regex": "/^(?<value>Type\\/(?<text>.*))$/",
+        "allValue": ".*"
+      },
+      {
+        "type": "query",
+        "name": "site_hosts",
+        "label": "Hosts of the site",
+        "description": "internal helper",
+        "datasource": {
+          "type": "alexanderzobnin-zabbix-datasource",
+          "uid": "zabbix-lab"
+        },
+        "query": {
+          "queryType": "host",
+          "group": "$site",
+          "host": "/.*/"
+        },
+        "definition": "{\"queryType\":\"host\",\"group\":\"$site\",\"host\":\"/.*/\"}",
+        "refresh": 1,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": [],
+        "skipUrlSync": false,
+        "hide": 2
+      },
+      {
+        "type": "query",
+        "name": "device",
+        "label": "Device",
+        "description": "Devices of the selected site and type. Pick one or several to compare. New Zabbix hosts appear here automatically.",
+        "datasource": {
+          "type": "alexanderzobnin-zabbix-datasource",
+          "uid": "zabbix-lab"
+        },
+        "query": {
+          "queryType": "host",
+          "group": "$device_group",
+          "host": "$site_hosts"
+        },
+        "definition": "{\"queryType\":\"host\",\"group\":\"$device_group\",\"host\":\"$site_hosts\"}",
+        "refresh": 1,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": [],
+        "skipUrlSync": false
+      },
+      {
+        "type": "query",
+        "name": "exporter",
+        "label": "Exporter",
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "netflow-clickhouse"
+        },
+        "query": "SELECT arrayJoin([${device:singlequote}]) AS e UNION DISTINCT SELECT DISTINCT ExporterName AS e FROM default.flows_1h0m0s WHERE TimeReceived > now() - INTERVAL 30 DAY AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') AND position('${site:csv}', '.*') > 0 AND position('${device_group:csv}', '.*') > 0 AND arraySort([${device:singlequote}]) = arraySort([${site_hosts:singlequote}]) ORDER BY 1",
+        "definition": "SELECT arrayJoin([${device:singlequote}]) AS e UNION DISTINCT SELECT DISTINCT ExporterName AS e FROM default.flows_1h0m0s WHERE TimeReceived > now() - INTERVAL 30 DAY AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') AND position('${site:csv}', '.*') > 0 AND position('${device_group:csv}', '.*') > 0 AND arraySort([${device:singlequote}]) = arraySort([${site_hosts:singlequote}]) ORDER BY 1",
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "current": {
+          "text": "All",
+          "value": "$__all",
+          "selected": true
+        },
+        "hide": 2
+      },
+      {
+        "type": "query",
+        "name": "interface",
+        "label": "Interface",
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "netflow-clickhouse"
+        },
+        "query": "SELECT DISTINCT InIfName FROM default.flows_1h0m0s WHERE InIfName != '' AND TimeReceived > now() - INTERVAL 30 DAY AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') AND has([${exporter:singlequote}], ExporterName) UNION DISTINCT SELECT DISTINCT OutIfName FROM default.flows_1h0m0s WHERE OutIfName != '' AND TimeReceived > now() - INTERVAL 30 DAY AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') AND has([${exporter:singlequote}], ExporterName) ORDER BY 1",
+        "definition": "SELECT DISTINCT InIfName FROM default.flows_1h0m0s WHERE InIfName != '' AND TimeReceived > now() - INTERVAL 30 DAY AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') AND has([${exporter:singlequote}], ExporterName) UNION DISTINCT SELECT DISTINCT OutIfName FROM default.flows_1h0m0s WHERE OutIfName != '' AND TimeReceived > now() - INTERVAL 30 DAY AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') AND has([${exporter:singlequote}], ExporterName) ORDER BY 1",
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "current": {
+          "text": "All",
+          "value": "$__all",
+          "selected": true
+        },
+        "hide": 0
+      },
+      {
+        "type": "custom",
+        "name": "direction",
+        "label": "Direction",
+        "query": "All : all,External → Internal : inbound,Internal → External : outbound,External → External : transit,Unclassified : unclassified",
+        "description": "Derived from verified interface boundary metadata; never guessed.",
+        "hide": 0,
+        "current": {
+          "text": "All",
+          "value": "all",
+          "selected": true
+        },
+        "options": [
+          {
+            "text": "All",
+            "value": "all",
+            "selected": true
+          },
+          {
+            "text": "External → Internal",
+            "value": "inbound",
+            "selected": false
+          },
+          {
+            "text": "Internal → External",
+            "value": "outbound",
+            "selected": false
+          },
+          {
+            "text": "External → External",
+            "value": "transit",
+            "selected": false
+          },
+          {
+            "text": "Unclassified",
+            "value": "unclassified",
+            "selected": false
+          }
+        ]
+      },
+      {
+        "type": "custom",
+        "name": "proto",
+        "label": "Protocol",
+        "query": "All : all,TCP : 6,UDP : 17,ICMP : 1",
+        "hide": 0,
+        "current": {
+          "text": "All",
+          "value": "all",
+          "selected": true
+        },
+        "options": [
+          {
+            "text": "All",
+            "value": "all",
+            "selected": true
+          },
+          {
+            "text": "TCP",
+            "value": "6",
+            "selected": false
+          },
+          {
+            "text": "UDP",
+            "value": "17",
+            "selected": false
+          },
+          {
+            "text": "ICMP",
+            "value": "1",
+            "selected": false
+          }
+        ]
+      },
+      {
+        "type": "textbox",
+        "name": "src_ip",
+        "label": "Source IP",
+        "query": "",
+        "current": {
+          "text": "",
+          "value": ""
+        },
+        "options": [
+          {
+            "text": "",
+            "value": "",
+            "selected": true
+          }
+        ],
+        "hide": 0
+      },
+      {
+        "type": "textbox",
+        "name": "dst_ip",
+        "label": "Dest IP",
+        "query": "",
+        "current": {
+          "text": "",
+          "value": ""
+        },
+        "options": [
+          {
+            "text": "",
+            "value": "",
+            "selected": true
+          }
+        ],
+        "hide": 0
+      },
+      {
+        "type": "query",
+        "name": "res",
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "netflow-clickhouse"
+        },
+        "query": "SELECT multiIf(${__to:raw} - ${__from:raw} <= 43200000, 'flows_1m0s', ${__to:raw} - ${__from:raw} <= 604800000, 'flows_5m0s', 'flows_1h0m0s')",
+        "definition": "SELECT multiIf(${__to:raw} - ${__from:raw} <= 43200000, 'flows_1m0s', ${__to:raw} - ${__from:raw} <= 604800000, 'flows_5m0s', 'flows_1h0m0s')",
+        "refresh": 2,
+        "hide": 2,
+        "multi": false,
+        "includeAll": false,
+        "current": {},
+        "options": []
+      },
+      {
+        "type": "query",
+        "name": "res_s",
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "netflow-clickhouse"
+        },
+        "query": "SELECT multiIf(${__to:raw} - ${__from:raw} <= 43200000, 60, ${__to:raw} - ${__from:raw} <= 604800000, 300, 3600)",
+        "definition": "SELECT multiIf(${__to:raw} - ${__from:raw} <= 43200000, 60, ${__to:raw} - ${__from:raw} <= 604800000, 300, 3600)",
+        "refresh": 2,
+        "hide": 2,
+        "multi": false,
+        "includeAll": false,
+        "current": {},
+        "options": []
+      }
+    ]
+  },
   "annotations": {
     "list": []
   },
-  "description": "Top IPs, conversations, applications and protocols. Raw-flow panels are capped to the latest 24 h. Use the Source/Dest IP variables (or click an IP) to investigate one host.",
-  "editable": true,
-  "graphTooltip": 1,
-  "id": null,
-  "links": [
-    {
-      "asDropdown": false,
-      "icon": "external link",
-      "includeVars": true,
-      "keepTime": true,
-      "tags": [
-        "netflow"
-      ],
-      "title": "NetFlow",
-      "type": "dashboards"
-    }
-  ],
   "panels": [
     {
+      "id": 1,
+      "type": "stat",
+      "title": "TOTAL TRAFFIC",
       "datasource": {
         "type": "grafana-clickhouse-datasource",
         "uid": "netflow-clickhouse"
       },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 4,
+        "h": 3
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "netflow-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "rawSql": "SELECT sum(Bytes*SamplingRate)*8/greatest(1, toUnixTimestamp($__toTime) - toUnixTimestamp($__fromTime)) AS bps FROM default.${res} WHERE $__timeFilter(TimeReceived) AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') AND has([${exporter:singlequote}], ExporterName) AND (has([${interface:singlequote}], InIfName) OR has([${interface:singlequote}], OutIfName)) AND ('${direction}'='all' OR multiIf(InIfBoundary = 'external' AND OutIfBoundary != 'external', 'inbound', OutIfBoundary = 'external' AND InIfBoundary != 'external', 'outbound', InIfBoundary = 'external' AND OutIfBoundary = 'external', 'transit', 'unclassified')='${direction}') AND ('${proto}'='all' OR Proto = toUInt32OrZero('${proto}'))"
+        }
+      ],
       "description": "Average over the selected range.",
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "fixedColor": "#C7D0DC",
-            "mode": "fixed"
-          },
+          "unit": "bps",
           "decimals": 1,
           "mappings": [],
-          "noValue": "0 bps",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#C7D0DC"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -44,131 +397,64 @@
               }
             ]
           },
-          "unit": "bps"
+          "noValue": "0 bps"
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 3,
-        "w": 4,
-        "x": 0,
-        "y": 0
-      },
-      "id": 1,
       "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
         "reduceOptions": {
+          "values": false,
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
-          "values": false
+          "fields": ""
         },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "auto",
+        "orientation": "auto",
         "text": {
           "titleSize": 11,
           "valueSize": 26
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "netflow-clickhouse"
-          },
-          "editorType": "sql",
-          "format": 1,
-          "rawSql": "SELECT sum(Bytes*SamplingRate)*8/greatest(1, toUnixTimestamp($__toTime) - toUnixTimestamp($__fromTime)) AS bps FROM default.${res} WHERE $__timeFilter(TimeReceived) AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') AND has([${exporter:singlequote}], ExporterName) AND (has([${iface:singlequote}], InIfName) OR has([${iface:singlequote}], OutIfName)) AND ('${direction}'='all' OR multiIf(InIfBoundary = 'external' AND OutIfBoundary != 'external', 'inbound', OutIfBoundary = 'external' AND InIfBoundary != 'external', 'outbound', InIfBoundary = 'external' AND OutIfBoundary = 'external', 'transit', 'unclassified')='${direction}') AND ('${proto}'='all' OR Proto = toUInt32OrZero('${proto}'))",
-          "refId": "A"
         }
-      ],
-      "title": "TOTAL TRAFFIC",
-      "type": "stat"
+      }
     },
     {
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "netflow-clickhouse"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "fixedColor": "#C7D0DC",
-            "mode": "fixed"
-          },
-          "decimals": 1,
-          "mappings": [],
-          "noValue": "0 B",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "blue",
-                "value": null
-              }
-            ]
-          },
-          "unit": "bytes"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 3,
-        "w": 4,
-        "x": 4,
-        "y": 0
-      },
       "id": 2,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "text": {
-          "titleSize": 11,
-          "valueSize": 26
-        },
-        "textMode": "auto"
+      "type": "stat",
+      "title": "TOTAL DATA",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "netflow-clickhouse"
+      },
+      "gridPos": {
+        "x": 4,
+        "y": 0,
+        "w": 4,
+        "h": 3
       },
       "targets": [
         {
+          "refId": "A",
           "datasource": {
             "type": "grafana-clickhouse-datasource",
             "uid": "netflow-clickhouse"
           },
           "editorType": "sql",
           "format": 1,
-          "rawSql": "SELECT sum(Bytes*SamplingRate) FROM default.${res} WHERE $__timeFilter(TimeReceived) AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') AND has([${exporter:singlequote}], ExporterName) AND (has([${iface:singlequote}], InIfName) OR has([${iface:singlequote}], OutIfName)) AND ('${direction}'='all' OR multiIf(InIfBoundary = 'external' AND OutIfBoundary != 'external', 'inbound', OutIfBoundary = 'external' AND InIfBoundary != 'external', 'outbound', InIfBoundary = 'external' AND OutIfBoundary = 'external', 'transit', 'unclassified')='${direction}') AND ('${proto}'='all' OR Proto = toUInt32OrZero('${proto}'))",
-          "refId": "A"
+          "rawSql": "SELECT sum(Bytes*SamplingRate) FROM default.${res} WHERE $__timeFilter(TimeReceived) AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') AND has([${exporter:singlequote}], ExporterName) AND (has([${interface:singlequote}], InIfName) OR has([${interface:singlequote}], OutIfName)) AND ('${direction}'='all' OR multiIf(InIfBoundary = 'external' AND OutIfBoundary != 'external', 'inbound', OutIfBoundary = 'external' AND InIfBoundary != 'external', 'outbound', InIfBoundary = 'external' AND OutIfBoundary = 'external', 'transit', 'unclassified')='${direction}') AND ('${proto}'='all' OR Proto = toUInt32OrZero('${proto}'))"
         }
       ],
-      "title": "TOTAL DATA",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "netflow-clickhouse"
-      },
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "fixedColor": "#C7D0DC",
-            "mode": "fixed"
-          },
+          "unit": "bytes",
           "decimals": 1,
           "mappings": [],
-          "noValue": "0",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#C7D0DC"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -178,63 +464,64 @@
               }
             ]
           },
-          "unit": "short"
+          "noValue": "0 B"
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 3,
-        "w": 4,
-        "x": 8,
-        "y": 0
-      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "auto",
+        "orientation": "auto",
+        "text": {
+          "titleSize": 11,
+          "valueSize": 26
+        }
+      }
+    },
+    {
       "id": 3,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "text": {
-          "titleSize": 11,
-          "valueSize": 26
-        },
-        "textMode": "auto"
+      "type": "stat",
+      "title": "PACKETS",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "netflow-clickhouse"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 4,
+        "h": 3
       },
       "targets": [
         {
+          "refId": "A",
           "datasource": {
             "type": "grafana-clickhouse-datasource",
             "uid": "netflow-clickhouse"
           },
           "editorType": "sql",
           "format": 1,
-          "rawSql": "SELECT sum(Packets*SamplingRate) FROM default.${res} WHERE $__timeFilter(TimeReceived) AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') AND has([${exporter:singlequote}], ExporterName) AND (has([${iface:singlequote}], InIfName) OR has([${iface:singlequote}], OutIfName)) AND ('${direction}'='all' OR multiIf(InIfBoundary = 'external' AND OutIfBoundary != 'external', 'inbound', OutIfBoundary = 'external' AND InIfBoundary != 'external', 'outbound', InIfBoundary = 'external' AND OutIfBoundary = 'external', 'transit', 'unclassified')='${direction}') AND ('${proto}'='all' OR Proto = toUInt32OrZero('${proto}'))",
-          "refId": "A"
+          "rawSql": "SELECT sum(Packets*SamplingRate) FROM default.${res} WHERE $__timeFilter(TimeReceived) AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') AND has([${exporter:singlequote}], ExporterName) AND (has([${interface:singlequote}], InIfName) OR has([${interface:singlequote}], OutIfName)) AND ('${direction}'='all' OR multiIf(InIfBoundary = 'external' AND OutIfBoundary != 'external', 'inbound', OutIfBoundary = 'external' AND InIfBoundary != 'external', 'outbound', InIfBoundary = 'external' AND OutIfBoundary = 'external', 'transit', 'unclassified')='${direction}') AND ('${proto}'='all' OR Proto = toUInt32OrZero('${proto}'))"
         }
       ],
-      "title": "PACKETS",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "netflow-clickhouse"
-      },
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "fixedColor": "#C7D0DC",
-            "mode": "fixed"
-          },
+          "unit": "short",
+          "decimals": 1,
           "mappings": [],
-          "noValue": "0",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#C7D0DC"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -244,153 +531,219 @@
               }
             ]
           },
-          "unit": "short"
+          "noValue": "0"
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 3,
-        "w": 4,
-        "x": 12,
-        "y": 0
-      },
-      "id": 4,
       "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
         "reduceOptions": {
+          "values": false,
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
-          "values": false
+          "fields": ""
         },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "auto",
+        "orientation": "auto",
         "text": {
           "titleSize": 11,
           "valueSize": 26
-        },
-        "textMode": "auto"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "FLOW RECORDS (≤24 h)",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "netflow-clickhouse"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 4,
+        "h": 3
       },
       "targets": [
         {
+          "refId": "A",
           "datasource": {
             "type": "grafana-clickhouse-datasource",
             "uid": "netflow-clickhouse"
           },
           "editorType": "sql",
           "format": 1,
-          "rawSql": "SELECT count() FROM default.flows WHERE TimeReceived >= greatest($__fromTime, now() - INTERVAL 24 HOUR) AND TimeReceived <= $__toTime AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') AND has([${exporter:singlequote}], ExporterName) AND (has([${iface:singlequote}], InIfName) OR has([${iface:singlequote}], OutIfName)) AND ('${direction}'='all' OR multiIf(InIfBoundary = 'external' AND OutIfBoundary != 'external', 'inbound', OutIfBoundary = 'external' AND InIfBoundary != 'external', 'outbound', InIfBoundary = 'external' AND OutIfBoundary = 'external', 'transit', 'unclassified')='${direction}') AND ('${proto}'='all' OR Proto = toUInt32OrZero('${proto}')) AND ('${src_ip}'='' OR replaceRegexpOne(IPv6NumToString(SrcAddr), '^::ffff:', '')='${src_ip}') AND ('${dst_ip}'='' OR replaceRegexpOne(IPv6NumToString(DstAddr), '^::ffff:', '')='${dst_ip}')",
-          "refId": "A"
+          "rawSql": "SELECT count() FROM default.flows WHERE TimeReceived >= greatest($__fromTime, now() - INTERVAL 24 HOUR) AND TimeReceived <= $__toTime AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') AND has([${exporter:singlequote}], ExporterName) AND (has([${interface:singlequote}], InIfName) OR has([${interface:singlequote}], OutIfName)) AND ('${direction}'='all' OR multiIf(InIfBoundary = 'external' AND OutIfBoundary != 'external', 'inbound', OutIfBoundary = 'external' AND InIfBoundary != 'external', 'outbound', InIfBoundary = 'external' AND OutIfBoundary = 'external', 'transit', 'unclassified')='${direction}') AND ('${proto}'='all' OR Proto = toUInt32OrZero('${proto}')) AND ('${src_ip}'='' OR replaceRegexpOne(IPv6NumToString(SrcAddr), '^::ffff:', '')='${src_ip}') AND ('${dst_ip}'='' OR replaceRegexpOne(IPv6NumToString(DstAddr), '^::ffff:', '')='${dst_ip}')"
         }
       ],
-      "title": "FLOW RECORDS (≤24 h)",
-      "type": "stat"
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "mappings": [],
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#C7D0DC"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "auto",
+        "orientation": "auto",
+        "text": {
+          "titleSize": 11,
+          "valueSize": 26
+        }
+      }
     },
     {
+      "id": 5,
+      "type": "stat",
+      "title": "FLOW COLLECTION",
       "datasource": {
         "type": "grafana-clickhouse-datasource",
         "uid": "netflow-clickhouse"
       },
-      "description": "REAL DATA = at least one real exporter sent flows in the last 5 minutes. IDLE = real exporters known, but no recent flows (not proof of failure). NO REAL EXPORTER DATA = nothing from a real exporter in 24 h.",
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 4,
+        "h": 3
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "netflow-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "rawSql": "SELECT multiIf(countIf(Status = 'ACTIVE') > 0, 2, countIf(Status = 'IDLE / NO RECENT FLOWS') > 0, 1, 0) FROM (SELECT l.exporter AS Exporter,\n  multiIf(r.ex = '', 'NO DATA', x.ex != '', 'ACTIVE', 'IDLE / NO RECENT FLOWS') AS Status,\n  if(has([${device:singlequote}], l.exporter), 'Configured', 'NOT IN INVENTORY') AS Inventory,\n  if(x.ex != '', x.bps, 0) AS Traffic, if(x.ex != '', x.fps, 0) AS `Flows/s`, if(r.ex = '', NULL, if(x.ex != '', x.age, r.age)) AS `Last flow`\n  FROM (SELECT arrayJoin([${exporter:singlequote}]) AS exporter) AS l\n  LEFT JOIN (SELECT ExporterName AS ex, dateDiff('second', max(TimeReceived), now()) AS age FROM default.flows_1m0s WHERE TimeReceived > now() - INTERVAL 7 DAY AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') GROUP BY ex) AS r ON l.exporter = r.ex\n  LEFT JOIN (SELECT ExporterName AS ex, sum(Bytes*SamplingRate)*8/300 AS bps, count()/300 AS fps, dateDiff('second', max(TimeReceived), now()) AS age FROM default.flows WHERE TimeReceived > now() - INTERVAL 5 MINUTE AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') GROUP BY ex) AS x ON l.exporter = x.ex)"
+        }
+      ],
+      "description": "RECEIVING FLOWS = at least one exporter sent flows in the last 5 minutes. IDLE = exporters seen in the last 7 days, none in the last 5 minutes. NO FLOW DATA = no exporter has sent flows in 7 days (expected in a lab without traffic). Neither is an outage: router availability is on the Device Health dashboard.",
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "fixedColor": "#C7D0DC",
-            "mode": "thresholds"
-          },
+          "unit": "none",
           "mappings": [
             {
+              "type": "value",
               "options": {
                 "0": {
-                  "color": "red",
-                  "index": 2,
-                  "text": "NO REAL EXPORTER DATA"
+                  "text": "NO FLOW DATA",
+                  "color": "#8A94A3",
+                  "index": 2
                 },
                 "1": {
-                  "color": "orange",
-                  "index": 1,
-                  "text": "IDLE / NO RECENT FLOWS"
+                  "text": "IDLE / NO RECENT FLOWS",
+                  "color": "#5B7A99",
+                  "index": 1
                 },
                 "2": {
+                  "text": "RECEIVING FLOWS",
                   "color": "green",
-                  "index": 0,
-                  "text": "REAL DATA"
+                  "index": 0
                 }
-              },
-              "type": "value"
+              }
             }
           ],
-          "noValue": "NO REAL EXPORTER DATA",
+          "color": {
+            "mode": "thresholds",
+            "fixedColor": "#C7D0DC"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "red",
+                "color": "#8A94A3",
                 "value": null
               }
             ]
           },
-          "unit": "none"
+          "noValue": "NO FLOW DATA"
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 3,
-        "w": 4,
-        "x": 16,
-        "y": 0
-      },
-      "id": 5,
       "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
         "colorMode": "background",
         "graphMode": "none",
         "justifyMode": "center",
+        "textMode": "value",
         "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
         "text": {
-          "titleSize": 11,
-          "valueSize": 18
-        },
-        "textMode": "value"
+          "valueSize": 18,
+          "titleSize": 11
+        }
+      }
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "LAST REAL FLOW",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "netflow-clickhouse"
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 0,
+        "w": 4,
+        "h": 3
       },
       "targets": [
         {
+          "refId": "A",
           "datasource": {
             "type": "grafana-clickhouse-datasource",
             "uid": "netflow-clickhouse"
           },
           "editorType": "sql",
           "format": 1,
-          "rawSql": "SELECT multiIf(active > 0, 2, known > 0, 1, 0) AS s FROM (\n     SELECT uniqExactIf(ExporterAddress, TimeReceived > now() - INTERVAL 5 MINUTE AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all')) AS active, uniqExactIf(ExporterAddress, (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all')) AS known\n     FROM default.flows_1m0s WHERE TimeReceived > now() - INTERVAL 24 HOUR)",
-          "refId": "A"
+          "rawSql": "SELECT if(count() = 0, NULL, dateDiff('second', max(TimeReceived), now())) AS age FROM default.flows WHERE TimeReceived > now() - INTERVAL 24 HOUR AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all')"
         }
       ],
-      "title": "STATUS",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "netflow-clickhouse"
-      },
-      "description": "Seconds since the newest flow record (raw table, last 24 h, same data scope as every other panel).",
+      "description": "Time since the newest flow record in the selected data scope (raw table, last 24 h). \"No flows in 24 h\" = nothing was received; it does not say a device is down.",
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "fixedColor": "#C7D0DC",
-            "mode": "thresholds"
-          },
+          "unit": "s",
           "decimals": 0,
           "mappings": [],
-          "noValue": "none in 24 h",
+          "color": {
+            "mode": "thresholds",
+            "fixedColor": "#C7D0DC"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -399,64 +752,60 @@
                 "value": null
               },
               {
-                "color": "orange",
+                "color": "#5B7A99",
                 "value": 300
-              },
-              {
-                "color": "red",
-                "value": 3600
               }
             ]
           },
-          "unit": "s"
+          "noValue": "No flows in 24 h"
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 3,
-        "w": 4,
-        "x": 20,
-        "y": 0
-      },
-      "id": 6,
       "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
         "reduceOptions": {
+          "values": false,
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
-          "values": false
+          "fields": ""
         },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "auto",
+        "orientation": "auto",
         "text": {
           "titleSize": 11,
           "valueSize": 26
-        },
-        "textMode": "auto"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "type": "table",
+      "title": "Top source IPs",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "netflow-clickhouse"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 3,
+        "w": 8,
+        "h": 8
       },
       "targets": [
         {
+          "refId": "A",
           "datasource": {
             "type": "grafana-clickhouse-datasource",
             "uid": "netflow-clickhouse"
           },
           "editorType": "sql",
           "format": 1,
-          "rawSql": "SELECT dateDiff('second', max(TimeReceived), now()) AS age FROM default.flows WHERE TimeReceived > now() - INTERVAL 24 HOUR AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all')",
-          "refId": "A"
+          "rawSql": "SELECT ipaddr AS IP, nm AS Network, round(bytes*8/greatest(1, toUnixTimestamp($__toTime) - toUnixTimestamp(greatest($__fromTime, now() - INTERVAL 24 HOUR)))) AS Traffic, round(100*bytes/sum(bytes) OVER (), 1) AS Share FROM (\n     SELECT replaceRegexpOne(IPv6NumToString(SrcAddr), '^::ffff:', '') AS ipaddr, if(any(SrcNetName) = '', '—', any(SrcNetName)) AS nm, sum(Bytes*SamplingRate) AS bytes\n     FROM default.flows WHERE TimeReceived >= greatest($__fromTime, now() - INTERVAL 24 HOUR) AND TimeReceived <= $__toTime AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') AND has([${exporter:singlequote}], ExporterName) AND (has([${interface:singlequote}], InIfName) OR has([${interface:singlequote}], OutIfName)) AND ('${direction}'='all' OR multiIf(InIfBoundary = 'external' AND OutIfBoundary != 'external', 'inbound', OutIfBoundary = 'external' AND InIfBoundary != 'external', 'outbound', InIfBoundary = 'external' AND OutIfBoundary = 'external', 'transit', 'unclassified')='${direction}') AND ('${proto}'='all' OR Proto = toUInt32OrZero('${proto}')) AND ('${src_ip}'='' OR replaceRegexpOne(IPv6NumToString(SrcAddr), '^::ffff:', '')='${src_ip}') AND ('${dst_ip}'='' OR replaceRegexpOne(IPv6NumToString(DstAddr), '^::ffff:', '')='${dst_ip}') GROUP BY ipaddr)\n   ORDER BY bytes DESC LIMIT 8"
         }
       ],
-      "title": "LAST REAL FLOW",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "netflow-clickhouse"
-      },
       "description": "Average rate over the selected range (max 24 h). Network = name from Akvorado network definitions, \"—\" if not defined. Click an IP to filter Top Talkers.",
       "fieldConfig": {
         "defaults": {
@@ -468,8 +817,8 @@
             "filterable": false,
             "inspect": false
           },
-          "links": [],
-          "noValue": "No flows in the selected scope (raw data: latest 24 h)"
+          "noValue": "No flows in the selected scope (raw data: latest 24 h)",
+          "links": []
         },
         "overrides": [
           {
@@ -513,16 +862,16 @@
               {
                 "id": "custom.cellOptions",
                 "value": {
-                  "mode": "basic",
                   "type": "gauge",
+                  "mode": "basic",
                   "valueDisplayMode": "text"
                 }
               },
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "#6E8CAE",
-                  "mode": "fixed"
+                  "mode": "fixed",
+                  "fixedColor": "#6E8CAE"
                 }
               },
               {
@@ -574,41 +923,41 @@
           }
         ]
       },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 0,
-        "y": 3
-      },
-      "id": 7,
       "options": {
+        "showHeader": true,
         "cellHeight": "sm",
         "footer": {
           "show": false
         },
-        "showHeader": true,
         "sortBy": []
+      }
+    },
+    {
+      "id": 8,
+      "type": "table",
+      "title": "Top destination IPs",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "netflow-clickhouse"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 3,
+        "w": 8,
+        "h": 8
       },
       "targets": [
         {
+          "refId": "A",
           "datasource": {
             "type": "grafana-clickhouse-datasource",
             "uid": "netflow-clickhouse"
           },
           "editorType": "sql",
           "format": 1,
-          "rawSql": "SELECT ipaddr AS IP, nm AS Network, round(bytes*8/greatest(1, toUnixTimestamp($__toTime) - toUnixTimestamp(greatest($__fromTime, now() - INTERVAL 24 HOUR)))) AS Traffic, round(100*bytes/sum(bytes) OVER (), 1) AS Share FROM (\n     SELECT replaceRegexpOne(IPv6NumToString(SrcAddr), '^::ffff:', '') AS ipaddr, if(any(SrcNetName) = '', '—', any(SrcNetName)) AS nm, sum(Bytes*SamplingRate) AS bytes\n     FROM default.flows WHERE TimeReceived >= greatest($__fromTime, now() - INTERVAL 24 HOUR) AND TimeReceived <= $__toTime AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') AND has([${exporter:singlequote}], ExporterName) AND (has([${iface:singlequote}], InIfName) OR has([${iface:singlequote}], OutIfName)) AND ('${direction}'='all' OR multiIf(InIfBoundary = 'external' AND OutIfBoundary != 'external', 'inbound', OutIfBoundary = 'external' AND InIfBoundary != 'external', 'outbound', InIfBoundary = 'external' AND OutIfBoundary = 'external', 'transit', 'unclassified')='${direction}') AND ('${proto}'='all' OR Proto = toUInt32OrZero('${proto}')) AND ('${src_ip}'='' OR replaceRegexpOne(IPv6NumToString(SrcAddr), '^::ffff:', '')='${src_ip}') AND ('${dst_ip}'='' OR replaceRegexpOne(IPv6NumToString(DstAddr), '^::ffff:', '')='${dst_ip}') GROUP BY ipaddr)\n   ORDER BY bytes DESC LIMIT 8",
-          "refId": "A"
+          "rawSql": "SELECT ipaddr AS IP, nm AS Network, round(bytes*8/greatest(1, toUnixTimestamp($__toTime) - toUnixTimestamp(greatest($__fromTime, now() - INTERVAL 24 HOUR)))) AS Traffic, round(100*bytes/sum(bytes) OVER (), 1) AS Share FROM (\n     SELECT replaceRegexpOne(IPv6NumToString(DstAddr), '^::ffff:', '') AS ipaddr, if(any(DstNetName) = '', '—', any(DstNetName)) AS nm, sum(Bytes*SamplingRate) AS bytes\n     FROM default.flows WHERE TimeReceived >= greatest($__fromTime, now() - INTERVAL 24 HOUR) AND TimeReceived <= $__toTime AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') AND has([${exporter:singlequote}], ExporterName) AND (has([${interface:singlequote}], InIfName) OR has([${interface:singlequote}], OutIfName)) AND ('${direction}'='all' OR multiIf(InIfBoundary = 'external' AND OutIfBoundary != 'external', 'inbound', OutIfBoundary = 'external' AND InIfBoundary != 'external', 'outbound', InIfBoundary = 'external' AND OutIfBoundary = 'external', 'transit', 'unclassified')='${direction}') AND ('${proto}'='all' OR Proto = toUInt32OrZero('${proto}')) AND ('${src_ip}'='' OR replaceRegexpOne(IPv6NumToString(SrcAddr), '^::ffff:', '')='${src_ip}') AND ('${dst_ip}'='' OR replaceRegexpOne(IPv6NumToString(DstAddr), '^::ffff:', '')='${dst_ip}') GROUP BY ipaddr)\n   ORDER BY bytes DESC LIMIT 8"
         }
       ],
-      "title": "Top source IPs",
-      "type": "table"
-    },
-    {
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "netflow-clickhouse"
-      },
       "description": "Average rate over the selected range (max 24 h). Network = name from Akvorado network definitions, \"—\" if not defined. Click an IP to filter Top Talkers.",
       "fieldConfig": {
         "defaults": {
@@ -620,8 +969,8 @@
             "filterable": false,
             "inspect": false
           },
-          "links": [],
-          "noValue": "No flows in the selected scope (raw data: latest 24 h)"
+          "noValue": "No flows in the selected scope (raw data: latest 24 h)",
+          "links": []
         },
         "overrides": [
           {
@@ -665,16 +1014,16 @@
               {
                 "id": "custom.cellOptions",
                 "value": {
-                  "mode": "basic",
                   "type": "gauge",
+                  "mode": "basic",
                   "valueDisplayMode": "text"
                 }
               },
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "#6E8CAE",
-                  "mode": "fixed"
+                  "mode": "fixed",
+                  "fixedColor": "#6E8CAE"
                 }
               },
               {
@@ -726,41 +1075,41 @@
           }
         ]
       },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 3
-      },
-      "id": 8,
       "options": {
+        "showHeader": true,
         "cellHeight": "sm",
         "footer": {
           "show": false
         },
-        "showHeader": true,
         "sortBy": []
+      }
+    },
+    {
+      "id": 9,
+      "type": "table",
+      "title": "Top applications / ports",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "netflow-clickhouse"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 3,
+        "w": 8,
+        "h": 8
       },
       "targets": [
         {
+          "refId": "A",
           "datasource": {
             "type": "grafana-clickhouse-datasource",
             "uid": "netflow-clickhouse"
           },
           "editorType": "sql",
           "format": 1,
-          "rawSql": "SELECT ipaddr AS IP, nm AS Network, round(bytes*8/greatest(1, toUnixTimestamp($__toTime) - toUnixTimestamp(greatest($__fromTime, now() - INTERVAL 24 HOUR)))) AS Traffic, round(100*bytes/sum(bytes) OVER (), 1) AS Share FROM (\n     SELECT replaceRegexpOne(IPv6NumToString(DstAddr), '^::ffff:', '') AS ipaddr, if(any(DstNetName) = '', '—', any(DstNetName)) AS nm, sum(Bytes*SamplingRate) AS bytes\n     FROM default.flows WHERE TimeReceived >= greatest($__fromTime, now() - INTERVAL 24 HOUR) AND TimeReceived <= $__toTime AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') AND has([${exporter:singlequote}], ExporterName) AND (has([${iface:singlequote}], InIfName) OR has([${iface:singlequote}], OutIfName)) AND ('${direction}'='all' OR multiIf(InIfBoundary = 'external' AND OutIfBoundary != 'external', 'inbound', OutIfBoundary = 'external' AND InIfBoundary != 'external', 'outbound', InIfBoundary = 'external' AND OutIfBoundary = 'external', 'transit', 'unclassified')='${direction}') AND ('${proto}'='all' OR Proto = toUInt32OrZero('${proto}')) AND ('${src_ip}'='' OR replaceRegexpOne(IPv6NumToString(SrcAddr), '^::ffff:', '')='${src_ip}') AND ('${dst_ip}'='' OR replaceRegexpOne(IPv6NumToString(DstAddr), '^::ffff:', '')='${dst_ip}') GROUP BY ipaddr)\n   ORDER BY bytes DESC LIMIT 8",
-          "refId": "A"
+          "rawSql": "SELECT app AS Application, round(bytes*8/greatest(1, toUnixTimestamp($__toTime) - toUnixTimestamp(greatest($__fromTime, now() - INTERVAL 24 HOUR)))) AS Traffic, round(100*bytes/sum(bytes) OVER (), 1) AS Share FROM (\n     SELECT concat(multiIf(Proto=6,'TCP',Proto=17,'UDP',Proto=1,'ICMP',concat('proto ',toString(Proto))), '/', toString(DstPort), if(transform(DstPort, [22,23,25,53,67,80,110,123,143,161,162,179,389,443,445,514,993,995,1194,3306,3389,5001,5060,8080,8443], ['SSH','Telnet','SMTP','DNS','DHCP','HTTP','POP3','NTP','IMAP','SNMP','SNMP trap','BGP','LDAP','HTTPS','SMB','Syslog','IMAPS','POP3S','OpenVPN','MySQL','RDP','iperf','SIP','HTTP-alt','HTTPS-alt'], '') = '', '', concat(' (', transform(DstPort, [22,23,25,53,67,80,110,123,143,161,162,179,389,443,445,514,993,995,1194,3306,3389,5001,5060,8080,8443], ['SSH','Telnet','SMTP','DNS','DHCP','HTTP','POP3','NTP','IMAP','SNMP','SNMP trap','BGP','LDAP','HTTPS','SMB','Syslog','IMAPS','POP3S','OpenVPN','MySQL','RDP','iperf','SIP','HTTP-alt','HTTPS-alt'], ''), ')'))) AS app, sum(Bytes*SamplingRate) AS bytes FROM default.flows\n     WHERE TimeReceived >= greatest($__fromTime, now() - INTERVAL 24 HOUR) AND TimeReceived <= $__toTime AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') AND has([${exporter:singlequote}], ExporterName) AND (has([${interface:singlequote}], InIfName) OR has([${interface:singlequote}], OutIfName)) AND ('${direction}'='all' OR multiIf(InIfBoundary = 'external' AND OutIfBoundary != 'external', 'inbound', OutIfBoundary = 'external' AND InIfBoundary != 'external', 'outbound', InIfBoundary = 'external' AND OutIfBoundary = 'external', 'transit', 'unclassified')='${direction}') AND ('${proto}'='all' OR Proto = toUInt32OrZero('${proto}')) AND ('${src_ip}'='' OR replaceRegexpOne(IPv6NumToString(SrcAddr), '^::ffff:', '')='${src_ip}') AND ('${dst_ip}'='' OR replaceRegexpOne(IPv6NumToString(DstAddr), '^::ffff:', '')='${dst_ip}') AND DstPort > 0 GROUP BY app)\n   ORDER BY bytes DESC LIMIT 8"
         }
       ],
-      "title": "Top destination IPs",
-      "type": "table"
-    },
-    {
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "netflow-clickhouse"
-      },
       "description": "Destination protocol/port with well-known service names.",
       "fieldConfig": {
         "defaults": {
@@ -772,8 +1121,8 @@
             "filterable": false,
             "inspect": false
           },
-          "links": [],
-          "noValue": "No TCP/UDP flows in the selected scope (raw data: latest 24 h)"
+          "noValue": "No TCP/UDP flows in the selected scope (raw data: latest 24 h)",
+          "links": []
         },
         "overrides": [
           {
@@ -817,16 +1166,16 @@
               {
                 "id": "custom.cellOptions",
                 "value": {
-                  "mode": "basic",
                   "type": "gauge",
+                  "mode": "basic",
                   "valueDisplayMode": "text"
                 }
               },
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "#6E8CAE",
-                  "mode": "fixed"
+                  "mode": "fixed",
+                  "fixedColor": "#6E8CAE"
                 }
               },
               {
@@ -837,41 +1186,41 @@
           }
         ]
       },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 3
-      },
-      "id": 9,
       "options": {
+        "showHeader": true,
         "cellHeight": "sm",
         "footer": {
           "show": false
         },
-        "showHeader": true,
         "sortBy": []
+      }
+    },
+    {
+      "id": 10,
+      "type": "table",
+      "title": "Top conversations",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "netflow-clickhouse"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 11,
+        "w": 16,
+        "h": 9
       },
       "targets": [
         {
+          "refId": "A",
           "datasource": {
             "type": "grafana-clickhouse-datasource",
             "uid": "netflow-clickhouse"
           },
           "editorType": "sql",
           "format": 1,
-          "rawSql": "SELECT app AS Application, round(bytes*8/greatest(1, toUnixTimestamp($__toTime) - toUnixTimestamp(greatest($__fromTime, now() - INTERVAL 24 HOUR)))) AS Traffic, round(100*bytes/sum(bytes) OVER (), 1) AS Share FROM (\n     SELECT concat(multiIf(Proto=6,'TCP',Proto=17,'UDP',Proto=1,'ICMP',concat('proto ',toString(Proto))), '/', toString(DstPort), if(transform(DstPort, [22,23,25,53,67,80,110,123,143,161,162,179,389,443,445,514,993,995,1194,3306,3389,5001,5060,8080,8443], ['SSH','Telnet','SMTP','DNS','DHCP','HTTP','POP3','NTP','IMAP','SNMP','SNMP trap','BGP','LDAP','HTTPS','SMB','Syslog','IMAPS','POP3S','OpenVPN','MySQL','RDP','iperf','SIP','HTTP-alt','HTTPS-alt'], '') = '', '', concat(' (', transform(DstPort, [22,23,25,53,67,80,110,123,143,161,162,179,389,443,445,514,993,995,1194,3306,3389,5001,5060,8080,8443], ['SSH','Telnet','SMTP','DNS','DHCP','HTTP','POP3','NTP','IMAP','SNMP','SNMP trap','BGP','LDAP','HTTPS','SMB','Syslog','IMAPS','POP3S','OpenVPN','MySQL','RDP','iperf','SIP','HTTP-alt','HTTPS-alt'], ''), ')'))) AS app, sum(Bytes*SamplingRate) AS bytes FROM default.flows\n     WHERE TimeReceived >= greatest($__fromTime, now() - INTERVAL 24 HOUR) AND TimeReceived <= $__toTime AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') AND has([${exporter:singlequote}], ExporterName) AND (has([${iface:singlequote}], InIfName) OR has([${iface:singlequote}], OutIfName)) AND ('${direction}'='all' OR multiIf(InIfBoundary = 'external' AND OutIfBoundary != 'external', 'inbound', OutIfBoundary = 'external' AND InIfBoundary != 'external', 'outbound', InIfBoundary = 'external' AND OutIfBoundary = 'external', 'transit', 'unclassified')='${direction}') AND ('${proto}'='all' OR Proto = toUInt32OrZero('${proto}')) AND ('${src_ip}'='' OR replaceRegexpOne(IPv6NumToString(SrcAddr), '^::ffff:', '')='${src_ip}') AND ('${dst_ip}'='' OR replaceRegexpOne(IPv6NumToString(DstAddr), '^::ffff:', '')='${dst_ip}') AND DstPort > 0 GROUP BY app)\n   ORDER BY bytes DESC LIMIT 8",
-          "refId": "A"
+          "rawSql": "SELECT conv AS Conversation, app AS Service, round(bytes*8/greatest(1, toUnixTimestamp($__toTime) - toUnixTimestamp(greatest($__fromTime, now() - INTERVAL 24 HOUR)))) AS Traffic, round(100*bytes/sum(bytes) OVER (), 1) AS Share FROM (\n     SELECT concat(replaceRegexpOne(IPv6NumToString(SrcAddr), '^::ffff:', ''), ' → ', replaceRegexpOne(IPv6NumToString(DstAddr), '^::ffff:', '')) AS conv, concat(multiIf(Proto=6,'TCP',Proto=17,'UDP',Proto=1,'ICMP',concat('proto ',toString(Proto))), '/', toString(DstPort), if(transform(DstPort, [22,23,25,53,67,80,110,123,143,161,162,179,389,443,445,514,993,995,1194,3306,3389,5001,5060,8080,8443], ['SSH','Telnet','SMTP','DNS','DHCP','HTTP','POP3','NTP','IMAP','SNMP','SNMP trap','BGP','LDAP','HTTPS','SMB','Syslog','IMAPS','POP3S','OpenVPN','MySQL','RDP','iperf','SIP','HTTP-alt','HTTPS-alt'], '') = '', '', concat(' (', transform(DstPort, [22,23,25,53,67,80,110,123,143,161,162,179,389,443,445,514,993,995,1194,3306,3389,5001,5060,8080,8443], ['SSH','Telnet','SMTP','DNS','DHCP','HTTP','POP3','NTP','IMAP','SNMP','SNMP trap','BGP','LDAP','HTTPS','SMB','Syslog','IMAPS','POP3S','OpenVPN','MySQL','RDP','iperf','SIP','HTTP-alt','HTTPS-alt'], ''), ')'))) AS app, sum(Bytes*SamplingRate) AS bytes\n     FROM default.flows WHERE TimeReceived >= greatest($__fromTime, now() - INTERVAL 24 HOUR) AND TimeReceived <= $__toTime AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') AND has([${exporter:singlequote}], ExporterName) AND (has([${interface:singlequote}], InIfName) OR has([${interface:singlequote}], OutIfName)) AND ('${direction}'='all' OR multiIf(InIfBoundary = 'external' AND OutIfBoundary != 'external', 'inbound', OutIfBoundary = 'external' AND InIfBoundary != 'external', 'outbound', InIfBoundary = 'external' AND OutIfBoundary = 'external', 'transit', 'unclassified')='${direction}') AND ('${proto}'='all' OR Proto = toUInt32OrZero('${proto}')) AND ('${src_ip}'='' OR replaceRegexpOne(IPv6NumToString(SrcAddr), '^::ffff:', '')='${src_ip}') AND ('${dst_ip}'='' OR replaceRegexpOne(IPv6NumToString(DstAddr), '^::ffff:', '')='${dst_ip}') GROUP BY conv, app)\n   ORDER BY bytes DESC LIMIT 12"
         }
       ],
-      "title": "Top applications / ports",
-      "type": "table"
-    },
-    {
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "netflow-clickhouse"
-      },
       "description": "Source → destination, protocol/destination port. Average rate over the selected range (max 24 h).",
       "fieldConfig": {
         "defaults": {
@@ -883,8 +1232,8 @@
             "filterable": false,
             "inspect": false
           },
-          "links": [],
-          "noValue": "No conversation data in the selected range (raw data: latest 24 h)"
+          "noValue": "No conversation data in the selected range (raw data: latest 24 h)",
+          "links": []
         },
         "overrides": [
           {
@@ -928,16 +1277,16 @@
               {
                 "id": "custom.cellOptions",
                 "value": {
-                  "mode": "basic",
                   "type": "gauge",
+                  "mode": "basic",
                   "valueDisplayMode": "text"
                 }
               },
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "#6E8CAE",
-                  "mode": "fixed"
+                  "mode": "fixed",
+                  "fixedColor": "#6E8CAE"
                 }
               },
               {
@@ -960,151 +1309,41 @@
           }
         ]
       },
-      "gridPos": {
-        "h": 9,
-        "w": 16,
-        "x": 0,
-        "y": 11
-      },
-      "id": 10,
       "options": {
+        "showHeader": true,
         "cellHeight": "sm",
         "footer": {
           "show": false
         },
-        "showHeader": true,
         "sortBy": []
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "netflow-clickhouse"
-          },
-          "editorType": "sql",
-          "format": 1,
-          "rawSql": "SELECT conv AS Conversation, app AS Service, round(bytes*8/greatest(1, toUnixTimestamp($__toTime) - toUnixTimestamp(greatest($__fromTime, now() - INTERVAL 24 HOUR)))) AS Traffic, round(100*bytes/sum(bytes) OVER (), 1) AS Share FROM (\n     SELECT concat(replaceRegexpOne(IPv6NumToString(SrcAddr), '^::ffff:', ''), ' → ', replaceRegexpOne(IPv6NumToString(DstAddr), '^::ffff:', '')) AS conv, concat(multiIf(Proto=6,'TCP',Proto=17,'UDP',Proto=1,'ICMP',concat('proto ',toString(Proto))), '/', toString(DstPort), if(transform(DstPort, [22,23,25,53,67,80,110,123,143,161,162,179,389,443,445,514,993,995,1194,3306,3389,5001,5060,8080,8443], ['SSH','Telnet','SMTP','DNS','DHCP','HTTP','POP3','NTP','IMAP','SNMP','SNMP trap','BGP','LDAP','HTTPS','SMB','Syslog','IMAPS','POP3S','OpenVPN','MySQL','RDP','iperf','SIP','HTTP-alt','HTTPS-alt'], '') = '', '', concat(' (', transform(DstPort, [22,23,25,53,67,80,110,123,143,161,162,179,389,443,445,514,993,995,1194,3306,3389,5001,5060,8080,8443], ['SSH','Telnet','SMTP','DNS','DHCP','HTTP','POP3','NTP','IMAP','SNMP','SNMP trap','BGP','LDAP','HTTPS','SMB','Syslog','IMAPS','POP3S','OpenVPN','MySQL','RDP','iperf','SIP','HTTP-alt','HTTPS-alt'], ''), ')'))) AS app, sum(Bytes*SamplingRate) AS bytes\n     FROM default.flows WHERE TimeReceived >= greatest($__fromTime, now() - INTERVAL 24 HOUR) AND TimeReceived <= $__toTime AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') AND has([${exporter:singlequote}], ExporterName) AND (has([${iface:singlequote}], InIfName) OR has([${iface:singlequote}], OutIfName)) AND ('${direction}'='all' OR multiIf(InIfBoundary = 'external' AND OutIfBoundary != 'external', 'inbound', OutIfBoundary = 'external' AND InIfBoundary != 'external', 'outbound', InIfBoundary = 'external' AND OutIfBoundary = 'external', 'transit', 'unclassified')='${direction}') AND ('${proto}'='all' OR Proto = toUInt32OrZero('${proto}')) AND ('${src_ip}'='' OR replaceRegexpOne(IPv6NumToString(SrcAddr), '^::ffff:', '')='${src_ip}') AND ('${dst_ip}'='' OR replaceRegexpOne(IPv6NumToString(DstAddr), '^::ffff:', '')='${dst_ip}') GROUP BY conv, app)\n   ORDER BY bytes DESC LIMIT 12",
-          "refId": "A"
-        }
-      ],
-      "title": "Top conversations",
-      "type": "table"
+      }
     },
     {
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "netflow-clickhouse"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "filterable": false,
-            "inspect": false
-          },
-          "links": [],
-          "noValue": "No traffic in the selected scope"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Traffic"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "bps"
-              },
-              {
-                "id": "decimals",
-                "value": 1
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Share"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "percent"
-              },
-              {
-                "id": "decimals",
-                "value": 1
-              },
-              {
-                "id": "min",
-                "value": 0
-              },
-              {
-                "id": "max",
-                "value": 100
-              },
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "mode": "basic",
-                  "type": "gauge",
-                  "valueDisplayMode": "text"
-                }
-              },
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#6E8CAE",
-                  "mode": "fixed"
-                }
-              },
-              {
-                "id": "custom.width",
-                "value": 150
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 5,
-        "w": 8,
-        "x": 16,
-        "y": 11
-      },
       "id": 11,
-      "options": {
-        "cellHeight": "sm",
-        "footer": {
-          "show": false
-        },
-        "showHeader": true,
-        "sortBy": []
+      "type": "table",
+      "title": "Protocol mix",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "netflow-clickhouse"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 11,
+        "w": 8,
+        "h": 5
       },
       "targets": [
         {
+          "refId": "A",
           "datasource": {
             "type": "grafana-clickhouse-datasource",
             "uid": "netflow-clickhouse"
           },
           "editorType": "sql",
           "format": 1,
-          "rawSql": "SELECT arr.1 AS Protocol, round(arr.2*8/greatest(1, toUnixTimestamp($__toTime) - toUnixTimestamp($__fromTime))) AS Traffic, round(100*arr.2/greatest(1, t + u + i + o), 1) AS Share FROM (\n     SELECT sumIf(b, c = 'TCP') AS t, sumIf(b, c = 'UDP') AS u, sumIf(b, c = 'ICMP') AS i, sumIf(b, c = 'Other') AS o FROM (\n       SELECT multiIf(Proto = 6, 'TCP', Proto = 17, 'UDP', Proto = 1, 'ICMP', 'Other') AS c, sum(Bytes*SamplingRate) AS b FROM default.${res} WHERE $__timeFilter(TimeReceived) AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') AND has([${exporter:singlequote}], ExporterName) AND (has([${iface:singlequote}], InIfName) OR has([${iface:singlequote}], OutIfName)) AND ('${direction}'='all' OR multiIf(InIfBoundary = 'external' AND OutIfBoundary != 'external', 'inbound', OutIfBoundary = 'external' AND InIfBoundary != 'external', 'outbound', InIfBoundary = 'external' AND OutIfBoundary = 'external', 'transit', 'unclassified')='${direction}') AND ('${proto}'='all' OR Proto = toUInt32OrZero('${proto}')) GROUP BY c))\n   ARRAY JOIN [('TCP', t), ('UDP', u), ('ICMP', i), ('Other', o)] AS arr",
-          "refId": "A"
+          "rawSql": "SELECT arr.1 AS Protocol, round(arr.2*8/greatest(1, toUnixTimestamp($__toTime) - toUnixTimestamp($__fromTime))) AS Traffic, round(100*arr.2/greatest(1, t + u + i + o), 1) AS Share FROM (\n     SELECT sumIf(b, c = 'TCP') AS t, sumIf(b, c = 'UDP') AS u, sumIf(b, c = 'ICMP') AS i, sumIf(b, c = 'Other') AS o FROM (\n       SELECT multiIf(Proto = 6, 'TCP', Proto = 17, 'UDP', Proto = 1, 'ICMP', 'Other') AS c, sum(Bytes*SamplingRate) AS b FROM default.${res} WHERE $__timeFilter(TimeReceived) AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') AND has([${exporter:singlequote}], ExporterName) AND (has([${interface:singlequote}], InIfName) OR has([${interface:singlequote}], OutIfName)) AND ('${direction}'='all' OR multiIf(InIfBoundary = 'external' AND OutIfBoundary != 'external', 'inbound', OutIfBoundary = 'external' AND InIfBoundary != 'external', 'outbound', InIfBoundary = 'external' AND OutIfBoundary = 'external', 'transit', 'unclassified')='${direction}') AND ('${proto}'='all' OR Proto = toUInt32OrZero('${proto}')) GROUP BY c))\n   ARRAY JOIN [('TCP', t), ('UDP', u), ('ICMP', i), ('Other', o)] AS arr"
         }
       ],
-      "title": "Protocol mix",
-      "type": "table"
-    },
-    {
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "netflow-clickhouse"
-      },
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -1115,8 +1354,8 @@
             "filterable": false,
             "inspect": false
           },
-          "links": [],
-          "noValue": "No TCP/UDP flows in the selected scope"
+          "noValue": "No traffic in the selected scope",
+          "links": []
         },
         "overrides": [
           {
@@ -1160,16 +1399,16 @@
               {
                 "id": "custom.cellOptions",
                 "value": {
-                  "mode": "basic",
                   "type": "gauge",
+                  "mode": "basic",
                   "valueDisplayMode": "text"
                 }
               },
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "#6E8CAE",
-                  "mode": "fixed"
+                  "mode": "fixed",
+                  "fixedColor": "#6E8CAE"
                 }
               },
               {
@@ -1180,66 +1419,176 @@
           }
         ]
       },
-      "gridPos": {
-        "h": 4,
-        "w": 8,
-        "x": 16,
-        "y": 16
-      },
-      "id": 12,
       "options": {
+        "showHeader": true,
         "cellHeight": "sm",
         "footer": {
           "show": false
         },
-        "showHeader": true,
         "sortBy": []
+      }
+    },
+    {
+      "id": 12,
+      "type": "table",
+      "title": "Top source ports",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "netflow-clickhouse"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 16,
+        "w": 8,
+        "h": 4
       },
       "targets": [
         {
+          "refId": "A",
           "datasource": {
             "type": "grafana-clickhouse-datasource",
             "uid": "netflow-clickhouse"
           },
           "editorType": "sql",
           "format": 1,
-          "rawSql": "SELECT app AS Port, round(bytes*8/greatest(1, toUnixTimestamp($__toTime) - toUnixTimestamp(greatest($__fromTime, now() - INTERVAL 24 HOUR)))) AS Traffic, round(100*bytes/sum(bytes) OVER (), 1) AS Share FROM (\n       SELECT concat(multiIf(Proto=6,'TCP',Proto=17,'UDP',Proto=1,'ICMP',concat('proto ',toString(Proto))), '/', toString(SrcPort)) AS app, sum(Bytes*SamplingRate) AS bytes FROM default.flows WHERE TimeReceived >= greatest($__fromTime, now() - INTERVAL 24 HOUR) AND TimeReceived <= $__toTime AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') AND has([${exporter:singlequote}], ExporterName) AND (has([${iface:singlequote}], InIfName) OR has([${iface:singlequote}], OutIfName)) AND ('${direction}'='all' OR multiIf(InIfBoundary = 'external' AND OutIfBoundary != 'external', 'inbound', OutIfBoundary = 'external' AND InIfBoundary != 'external', 'outbound', InIfBoundary = 'external' AND OutIfBoundary = 'external', 'transit', 'unclassified')='${direction}') AND ('${proto}'='all' OR Proto = toUInt32OrZero('${proto}')) AND ('${src_ip}'='' OR replaceRegexpOne(IPv6NumToString(SrcAddr), '^::ffff:', '')='${src_ip}') AND ('${dst_ip}'='' OR replaceRegexpOne(IPv6NumToString(DstAddr), '^::ffff:', '')='${dst_ip}') AND SrcPort > 0 GROUP BY app)\n     ORDER BY bytes DESC LIMIT 3",
-          "refId": "A"
+          "rawSql": "SELECT app AS Port, round(bytes*8/greatest(1, toUnixTimestamp($__toTime) - toUnixTimestamp(greatest($__fromTime, now() - INTERVAL 24 HOUR)))) AS Traffic, round(100*bytes/sum(bytes) OVER (), 1) AS Share FROM (\n       SELECT concat(multiIf(Proto=6,'TCP',Proto=17,'UDP',Proto=1,'ICMP',concat('proto ',toString(Proto))), '/', toString(SrcPort)) AS app, sum(Bytes*SamplingRate) AS bytes FROM default.flows WHERE TimeReceived >= greatest($__fromTime, now() - INTERVAL 24 HOUR) AND TimeReceived <= $__toTime AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') AND has([${exporter:singlequote}], ExporterName) AND (has([${interface:singlequote}], InIfName) OR has([${interface:singlequote}], OutIfName)) AND ('${direction}'='all' OR multiIf(InIfBoundary = 'external' AND OutIfBoundary != 'external', 'inbound', OutIfBoundary = 'external' AND InIfBoundary != 'external', 'outbound', InIfBoundary = 'external' AND OutIfBoundary = 'external', 'transit', 'unclassified')='${direction}') AND ('${proto}'='all' OR Proto = toUInt32OrZero('${proto}')) AND ('${src_ip}'='' OR replaceRegexpOne(IPv6NumToString(SrcAddr), '^::ffff:', '')='${src_ip}') AND ('${dst_ip}'='' OR replaceRegexpOne(IPv6NumToString(DstAddr), '^::ffff:', '')='${dst_ip}') AND SrcPort > 0 GROUP BY app)\n     ORDER BY bytes DESC LIMIT 3"
         }
       ],
-      "title": "Top source ports",
-      "type": "table"
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": false,
+            "inspect": false
+          },
+          "noValue": "No TCP/UDP flows in the selected scope",
+          "links": []
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Traffic"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bps"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Share"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "max",
+                "value": 100
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "basic",
+                  "valueDisplayMode": "text"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#6E8CAE"
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 150
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        },
+        "sortBy": []
+      }
     },
     {
+      "id": 13,
+      "type": "stat",
+      "title": "Detail window",
       "datasource": {
         "type": "grafana-clickhouse-datasource",
         "uid": "netflow-clickhouse"
       },
+      "gridPos": {
+        "x": 0,
+        "y": 20,
+        "w": 24,
+        "h": 1
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "netflow-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "rawSql": "SELECT toUInt8(toUnixTimestamp($__toTime) - toUnixTimestamp($__fromTime) > 86400) AS over24"
+        }
+      ],
       "description": "IP, port, conversation and flow-count panels read raw flow records, which are always limited to the latest 24 hours.",
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "fixedColor": "#C7D0DC",
-            "mode": "fixed"
-          },
+          "unit": "none",
           "mappings": [
             {
+              "type": "value",
               "options": {
                 "0": {
+                  "text": "IP / port / conversation detail covers the selected range (raw data is kept for 24 h).",
                   "color": "#8F9BAA",
-                  "index": 0,
-                  "text": "IP / port / conversation detail covers the selected range (raw data is kept for 24 h)."
+                  "index": 0
                 },
                 "1": {
+                  "text": "⚠ Detailed IP / Port / Conversation data is limited to the latest 24 hours (selected range is longer).",
                   "color": "orange",
-                  "index": 1,
-                  "text": "⚠ Detailed IP / Port / Conversation data is limited to the latest 24 hours (selected range is longer)."
+                  "index": 1
                 }
-              },
-              "type": "value"
+              }
             }
           ],
-          "noValue": "—",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#C7D0DC"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1249,287 +1598,42 @@
               }
             ]
           },
-          "unit": "none"
+          "noValue": "—"
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 20
-      },
-      "id": 13,
       "options": {
-        "colorMode": "none",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
         "reduceOptions": {
+          "values": false,
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
-          "values": false
+          "fields": ""
         },
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "value",
+        "orientation": "auto",
         "text": {
           "valueSize": 12
-        },
-        "textMode": "value"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "netflow-clickhouse"
-          },
-          "editorType": "sql",
-          "format": 1,
-          "rawSql": "SELECT toUInt8(toUnixTimestamp($__toTime) - toUnixTimestamp($__fromTime) > 86400) AS over24",
-          "refId": "A"
         }
-      ],
-      "title": "Detail window",
-      "type": "stat"
+      }
     }
   ],
-  "refresh": "1m",
-  "schemaVersion": 39,
-  "tags": [
-    "netflow",
-    "netops"
-  ],
-  "templating": {
-    "list": [
-      {
-        "current": {
-          "selected": true,
-          "text": "Real only",
-          "value": "real"
-        },
-        "description": "Real = synthetic demo exporter excluded (default).",
-        "hide": 0,
-        "label": "Data scope",
-        "name": "scope",
-        "options": [
-          {
-            "selected": true,
-            "text": "Real only",
-            "value": "real"
-          },
-          {
-            "selected": false,
-            "text": "Demo only",
-            "value": "demo"
-          },
-          {
-            "selected": false,
-            "text": "Real + demo",
-            "value": "all"
-          }
-        ],
-        "query": "Real only : real,Demo only : demo,Real + demo : all",
-        "type": "custom"
-      },
-      {
-        "current": {
-          "selected": true,
-          "text": "All",
-          "value": "$__all"
-        },
-        "datasource": {
-          "type": "grafana-clickhouse-datasource",
-          "uid": "netflow-clickhouse"
-        },
-        "definition": "SELECT DISTINCT ExporterName FROM default.flows_1h0m0s WHERE TimeReceived > now() - INTERVAL 30 DAY AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') ORDER BY 1",
-        "hide": 0,
-        "includeAll": true,
-        "label": "Exporter",
-        "multi": true,
-        "name": "exporter",
-        "query": "SELECT DISTINCT ExporterName FROM default.flows_1h0m0s WHERE TimeReceived > now() - INTERVAL 30 DAY AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') ORDER BY 1",
-        "refresh": 2,
-        "sort": 1,
-        "type": "query"
-      },
-      {
-        "current": {
-          "selected": true,
-          "text": "All",
-          "value": "$__all"
-        },
-        "datasource": {
-          "type": "grafana-clickhouse-datasource",
-          "uid": "netflow-clickhouse"
-        },
-        "definition": "SELECT DISTINCT InIfName FROM default.flows_1h0m0s WHERE InIfName != '' AND TimeReceived > now() - INTERVAL 30 DAY AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') AND has([${exporter:singlequote}], ExporterName) UNION DISTINCT SELECT DISTINCT OutIfName FROM default.flows_1h0m0s WHERE OutIfName != '' AND TimeReceived > now() - INTERVAL 30 DAY AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') AND has([${exporter:singlequote}], ExporterName) ORDER BY 1",
-        "hide": 0,
-        "includeAll": true,
-        "label": "Interface",
-        "multi": true,
-        "name": "iface",
-        "query": "SELECT DISTINCT InIfName FROM default.flows_1h0m0s WHERE InIfName != '' AND TimeReceived > now() - INTERVAL 30 DAY AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') AND has([${exporter:singlequote}], ExporterName) UNION DISTINCT SELECT DISTINCT OutIfName FROM default.flows_1h0m0s WHERE OutIfName != '' AND TimeReceived > now() - INTERVAL 30 DAY AND (('${scope}'='real' AND ExporterAddress != toIPv6('::ffff:247.16.14.11')) OR ('${scope}'='demo' AND ExporterAddress = toIPv6('::ffff:247.16.14.11')) OR '${scope}'='all') AND has([${exporter:singlequote}], ExporterName) ORDER BY 1",
-        "refresh": 2,
-        "sort": 1,
-        "type": "query"
-      },
-      {
-        "current": {
-          "selected": true,
-          "text": "All",
-          "value": "all"
-        },
-        "description": "Derived from verified interface boundary metadata; never guessed.",
-        "hide": 0,
-        "label": "Direction",
-        "name": "direction",
-        "options": [
-          {
-            "selected": true,
-            "text": "All",
-            "value": "all"
-          },
-          {
-            "selected": false,
-            "text": "External → Internal",
-            "value": "inbound"
-          },
-          {
-            "selected": false,
-            "text": "Internal → External",
-            "value": "outbound"
-          },
-          {
-            "selected": false,
-            "text": "External → External",
-            "value": "transit"
-          },
-          {
-            "selected": false,
-            "text": "Unclassified",
-            "value": "unclassified"
-          }
-        ],
-        "query": "All : all,External → Internal : inbound,Internal → External : outbound,External → External : transit,Unclassified : unclassified",
-        "type": "custom"
-      },
-      {
-        "current": {
-          "selected": true,
-          "text": "All",
-          "value": "all"
-        },
-        "hide": 0,
-        "label": "Protocol",
-        "name": "proto",
-        "options": [
-          {
-            "selected": true,
-            "text": "All",
-            "value": "all"
-          },
-          {
-            "selected": false,
-            "text": "TCP",
-            "value": "6"
-          },
-          {
-            "selected": false,
-            "text": "UDP",
-            "value": "17"
-          },
-          {
-            "selected": false,
-            "text": "ICMP",
-            "value": "1"
-          }
-        ],
-        "query": "All : all,TCP : 6,UDP : 17,ICMP : 1",
-        "type": "custom"
-      },
-      {
-        "current": {
-          "text": "",
-          "value": ""
-        },
-        "hide": 0,
-        "label": "Source IP",
-        "name": "src_ip",
-        "options": [
-          {
-            "selected": true,
-            "text": "",
-            "value": ""
-          }
-        ],
-        "query": "",
-        "type": "textbox"
-      },
-      {
-        "current": {
-          "text": "",
-          "value": ""
-        },
-        "hide": 0,
-        "label": "Dest IP",
-        "name": "dst_ip",
-        "options": [
-          {
-            "selected": true,
-            "text": "",
-            "value": ""
-          }
-        ],
-        "query": "",
-        "type": "textbox"
-      },
-      {
-        "current": {},
-        "datasource": {
-          "type": "grafana-clickhouse-datasource",
-          "uid": "netflow-clickhouse"
-        },
-        "definition": "SELECT multiIf(${__to:raw} - ${__from:raw} <= 43200000, 'flows_1m0s', ${__to:raw} - ${__from:raw} <= 604800000, 'flows_5m0s', 'flows_1h0m0s')",
-        "hide": 2,
-        "includeAll": false,
-        "multi": false,
-        "name": "res",
-        "options": [],
-        "query": "SELECT multiIf(${__to:raw} - ${__from:raw} <= 43200000, 'flows_1m0s', ${__to:raw} - ${__from:raw} <= 604800000, 'flows_5m0s', 'flows_1h0m0s')",
-        "refresh": 2,
-        "type": "query"
-      },
-      {
-        "current": {},
-        "datasource": {
-          "type": "grafana-clickhouse-datasource",
-          "uid": "netflow-clickhouse"
-        },
-        "definition": "SELECT multiIf(${__to:raw} - ${__from:raw} <= 43200000, 60, ${__to:raw} - ${__from:raw} <= 604800000, 300, 3600)",
-        "hide": 2,
-        "includeAll": false,
-        "multi": false,
-        "name": "res_s",
-        "options": [],
-        "query": "SELECT multiIf(${__to:raw} - ${__from:raw} <= 43200000, 60, ${__to:raw} - ${__from:raw} <= 604800000, 300, 3600)",
-        "refresh": 2,
-        "type": "query"
-      }
-    ]
-  },
-  "time": {
-    "from": "now-1h",
-    "to": "now"
-  },
-  "timepicker": {
-    "refresh_intervals": [
-      "30s",
-      "1m",
-      "5m",
-      "15m"
-    ]
-  },
-  "timezone": "browser",
-  "title": "NetFlow | Top Talkers",
-  "uid": "netflow-top-talkers"
+  "links": [
+    {
+      "type": "dashboards",
+      "title": "NOC dashboards",
+      "tags": [
+        "netops"
+      ],
+      "asDropdown": true,
+      "includeVars": true,
+      "keepTime": true,
+      "icon": "dashboard",
+      "targetBlank": false,
+      "tooltip": "Switch dashboard and keep site, device and time range"
+    }
+  ]
 }

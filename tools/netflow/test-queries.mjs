@@ -8,7 +8,9 @@ import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 const arg = (n, d) => { const i = process.argv.indexOf('--' + n); return i > 0 ? process.argv[i + 1] : d; };
 const scope = arg('scope', 'all');
-const OV = { exporter: arg('exporter', null), iface: arg('iface', null) };
+const OV = { exporter: arg('exporter', null), interface: arg('iface', null) };
+// Zabbix-backed selectors cannot be evaluated here: --devices stands in for the inventory (the hosts selected by site / device type / device)
+const DEVICES = arg('devices', 'SITE-A,SITE-B').split(',');
 const quiet = process.argv.includes('--quiet');
 const to = new Date(arg('to', new Date().toISOString())).getTime();
 const from = new Date(arg('from', new Date(to - 6 * 3600e3).toISOString())).getTime();
@@ -32,7 +34,7 @@ const vals = { scope, direction: arg('direction', 'all'), proto: arg('proto', 'a
 function sub(sql, lists = {}) {
   return sql.replace(/\$\{(\w+)(?::(\w+))?\}/g, (m, n, f) => {
     if (n === '__to') return String(to); if (n === '__from') return String(from);
-    if (lists[n]) return lists[n].map((x) => `'${x}'`).join(',');
+    if (lists[n]) return f === 'csv' ? lists[n].join(',') : lists[n].map((x) => `'${x}'`).join(',');
     if (n in vals) return String(vals[n]);
     return m;
   });
@@ -43,9 +45,10 @@ for (const f of readdirSync(join(here, '..', '..', 'dashboards', 'netflow')).fil
   console.log(`\n=== ${d.title}  (scope=${scope}, ${res[0]})`);
   const lists = {};
   for (const v of d.templating.list.filter((v) => v.type === 'query')) {
+    if (v.datasource?.type === 'alexanderzobnin-zabbix-datasource') { lists[v.name] = ['site', 'device_group'].includes(v.name) ? ['.*'] : DEVICES; continue; }
     const r = await run(sub(v.query, lists), 1);
     if (r.err) { console.log(`  VAR ${v.name}: ERR ${r.err}`); bad++; continue; }
-    if (v.hide === 2) { vals[v.name] = r.first[0] ?? vals[v.name]; console.log(`  VAR ${v.name} -> ${vals[v.name]}`); continue; }
+    if (v.hide === 2 && ['res', 'res_s'].includes(v.name)) { vals[v.name] = r.first[0] ?? vals[v.name]; console.log(`  VAR ${v.name} -> ${vals[v.name]}`); continue; }
     const q = await (async () => { const rr = await fetch(URL_ + '/api/ds/query', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: auth },
       body: JSON.stringify({ from: String(from), to: String(to), queries: [{ refId: 'A', datasource: { type: 'grafana-clickhouse-datasource', uid: 'netflow-clickhouse' }, rawSql: sub(v.query, lists), editorType: 'sql', format: 1 }] }) }); return (await rr.json()).results.A.frames?.[0]?.data.values[0] || []; })();
     lists[v.name] = OV[v.name] ? [OV[v.name]] : q; if (!quiet) console.log(`  VAR ${v.name}: ${q.length} values [${q.slice(0, 3)}] ${r.ms}ms`);
@@ -57,4 +60,4 @@ for (const f of readdirSync(join(here, '..', '..', 'dashboards', 'netflow')).fil
     else if (!quiet) console.log(`  ok    ${p.title.padEnd(46)} rows=${String(r.rows).padEnd(4)} ${String(r.ms).padStart(5)}ms ${JSON.stringify(r.first).slice(0, 70)}`);
   }
 }
-console.log(`${bad ? bad + " FAILURES" : "ALL OK"} | queries=${nq} total=${tms}ms max=${mx}ms | scope=${scope} range=${Math.round((to - from) / 60000)}min exporter=${OV.exporter || "*"} iface=${OV.iface || "*"} proto=${vals.proto} dir=${vals.direction}`); process.exit(bad ? 1 : 0);
+console.log(`${bad ? bad + " FAILURES" : "ALL OK"} | queries=${nq} total=${tms}ms max=${mx}ms | scope=${scope} range=${Math.round((to - from) / 60000)}min exporter=${OV.exporter || "*"} interface=${OV.interface || "*"} proto=${vals.proto} dir=${vals.direction}`); process.exit(bad ? 1 : 0);

@@ -4,11 +4,11 @@
 
 | Folder | uid | Title | Panels | Variables | Refresh | Default range | Datasources |
 |---|---|---|---|---|---|---|---|
-| netflow | `netflow-asn` | NetFlow | ASN & Internet | 11 | 7 | 1m | now-24h to now | NetFlow ClickHouse |
-| netflow | `netflow-exporters` | NetFlow | Exporters & Interfaces | 8 | 7 | 30s | now-6h to now | NetFlow ClickHouse |
-| netflow | `netflow-health` | NetFlow | Platform Health | 11 | 1 | 30s | now-24h to now | NetFlow ClickHouse |
-| netflow | `netflow-overview` | NetFlow | NOC Overview | 16 | 7 | 30s | now-6h to now | NetFlow ClickHouse |
-| netflow | `netflow-top-talkers` | NetFlow | Top Talkers | 13 | 9 | 1m | now-1h to now | NetFlow ClickHouse |
+| netflow | `netflow-asn` | NetFlow | ASN & Internet | 11 | 11 | 1m | now-24h to now | Zabbix LAB, NetFlow ClickHouse |
+| netflow | `netflow-exporters` | NetFlow | Exporters & Interfaces | 10 | 11 | 30s | now-6h to now | Zabbix LAB, NetFlow ClickHouse |
+| netflow | `netflow-health` | NetFlow | Platform Health | 17 | 6 | 30s | now-24h to now | Zabbix LAB, NetFlow ClickHouse |
+| netflow | `netflow-overview` | NetFlow | NOC Overview | 16 | 11 | 30s | now-6h to now | Zabbix LAB, NetFlow ClickHouse |
+| netflow | `netflow-top-talkers` | NetFlow | Top Talkers | 13 | 13 | 1m | now-1h to now | Zabbix LAB, NetFlow ClickHouse |
 | noc | `noc-device-health` | NOC — Device Health | 23 | 5 | 30s | now-6h to now | Zabbix LAB, NOC Inventory (local) |
 | noc | `noc-wan-overview` | NOC — WAN Overview | 15 | 8 | 30s | now-6h to now | Zabbix LAB |
 
@@ -16,11 +16,11 @@
 
 ASN, boundary and provider visibility. Provider and organization data are shown only when they exist in the data; nothing is inferred.
 
-Tags: netflow, netops. Variables: `scope`, `exporter`, `iface`, `direction`, `proto`, `res`, `res_s`.
+Tags: netflow, netops. Variables: `scope`, `site`, `device_group`, `site_hosts`, `device`, `exporter`, `interface`, `direction`, `proto`, `res`, `res_s`.
 
 | Panel | Type |
 |---|---|
-| STATUS | stat |
+| FLOW COLLECTION | stat |
 | SOURCE ASNs | stat |
 | DESTINATION ASNs | stat |
 | PUBLIC-ASN TRAFFIC | stat |
@@ -36,14 +36,16 @@ Tags: netflow, netops. Variables: `scope`, `exporter`, `iface`, `direction`, `pr
 
 Which exporter sends, on which interface, and whether it is still sending.
 
-Tags: netflow, netops. Variables: `scope`, `exporter`, `iface`, `direction`, `proto`, `res`, `res_s`.
+Tags: netflow, netops. Variables: `scope`, `site`, `device_group`, `site_hosts`, `device`, `exporter`, `interface`, `direction`, `proto`, `res`, `res_s`.
 
 | Panel | Type |
 |---|---|
-| STATUS | stat |
-| ACTIVE EXPORTERS | stat |
-| SILENT EXPORTERS | stat |
-| FLOW RATE | stat |
+| FLOW COLLECTION | stat |
+| CONFIGURED | stat |
+| ACTIVE | stat |
+| IDLE | stat |
+| NO DATA | stat |
+| NOT IN INVENTORY | stat |
 | Traffic by exporter | timeseries |
 | Traffic by ingress interface | timeseries |
 | Interfaces (last ≤24 h) | table |
@@ -51,18 +53,24 @@ Tags: netflow, netops. Variables: `scope`, `exporter`, `iface`, `direction`, `pr
 
 ## NetFlow | Platform Health (`netflow-health`, folder netflow)
 
-Pipeline freshness, ClickHouse health, storage growth and Grafana query cost. Container state (inlet/outlet/Kafka) is available only via status.sh.
+Platform (ClickHouse), flow collection and exporters are shown separately. Platform tiles ignore the selection; collector and exporter tiles follow the site / device selection. No traffic is "no data", not an outage. Container state (inlet/outlet/Kafka) is available only via status.sh.
 
-Tags: netflow, netops. Variables: `scope`.
+Tags: netflow, netops. Variables: `scope`, `site`, `device_group`, `site_hosts`, `device`, `exporter`.
 
 | Panel | Type |
 |---|---|
-| PIPELINE | stat |
+| FLOW COLLECTION | stat |
 | LAST REAL FLOW AGE | stat |
-| ACTIVE EXPORTERS | stat |
+| CLICKHOUSE | stat |
 | CLICKHOUSE MEMORY | stat |
 | DISK UTILIZATION | stat |
 | QUERY HEALTH (p95) | stat |
+| CONFIGURED EXPORTERS | stat |
+| OBSERVED (7 d) | stat |
+| ACTIVE (5 min) | stat |
+| IDLE | stat |
+| NO DATA | stat |
+| NOT IN INVENTORY | stat |
 | Ingestion rate | timeseries |
 | New flow data per hour | timeseries |
 | Exporter freshness | table |
@@ -73,11 +81,11 @@ Tags: netflow, netops. Variables: `scope`.
 
 Ten-second operational overview. Real traffic only by default.
 
-Tags: netflow, netops. Variables: `scope`, `exporter`, `iface`, `direction`, `proto`, `res`, `res_s`.
+Tags: netflow, netops. Variables: `scope`, `site`, `device_group`, `site_hosts`, `device`, `exporter`, `interface`, `direction`, `proto`, `res`, `res_s`.
 
 | Panel | Type |
 |---|---|
-| STATUS | stat |
+| FLOW COLLECTION | stat |
 | ACTIVE EXPORTERS | stat |
 | CURRENT TRAFFIC | stat |
 | PEAK TRAFFIC | stat |
@@ -98,7 +106,7 @@ Tags: netflow, netops. Variables: `scope`, `exporter`, `iface`, `direction`, `pr
 
 Top IPs, conversations, applications and protocols. Raw-flow panels are capped to the latest 24 h. Use the Source/Dest IP variables (or click an IP) to investigate one host.
 
-Tags: netflow, netops. Variables: `scope`, `exporter`, `iface`, `direction`, `proto`, `src_ip`, `dst_ip`, `res`, `res_s`.
+Tags: netflow, netops. Variables: `scope`, `site`, `device_group`, `site_hosts`, `device`, `exporter`, `interface`, `direction`, `proto`, `src_ip`, `dst_ip`, `res`, `res_s`.
 
 | Panel | Type |
 |---|---|
@@ -106,7 +114,7 @@ Tags: netflow, netops. Variables: `scope`, `exporter`, `iface`, `direction`, `pr
 | TOTAL DATA | stat |
 | PACKETS | stat |
 | FLOW RECORDS (≤24 h) | stat |
-| STATUS | stat |
+| FLOW COLLECTION | stat |
 | LAST REAL FLOW | stat |
 | Top source IPs | table |
 | Top destination IPs | table |

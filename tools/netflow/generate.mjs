@@ -6,8 +6,12 @@
 //  * Raw `flows` only for what rollups do not keep (IPs, ports, conversations, flow counts, exact
 //    last-flow age) and ALWAYS capped to the last 24 h.
 //  * Neutral colours for traffic; semantic colours (green/amber/red/grey) only for health/status.
-//  * An exporter is never "DOWN" from NetFlow alone: no recent flows = IDLE / NO RECENT FLOWS.
+//  * An exporter is never "DOWN" from NetFlow alone: no recent flows = IDLE / NO RECENT FLOWS; a configured device that never sent a flow is NO DATA.
+//  * Selection = the standard NOC variables: site / device_group / device come from the Zabbix inventory (so a device that never sent a flow is
+//    still selectable); `exporter` is the hidden effective ExporterName set (selected devices + observed exporters outside the inventory when
+//    everything is selected); `interface` lists the interfaces seen in flows for those exporters. ExporterName = Zabbix host name.
 import { writeFileSync, mkdirSync } from 'node:fs';
+import { siteVar, deviceGroupVar, siteHostsVar, deviceVar, navLinks, COLORS } from '../monitoring/scope.mjs';
 
 const DS = { type: 'grafana-clickhouse-datasource', uid: 'netflow-clickhouse' };
 const DEMO = "toIPv6('::ffff:247.16.14.11')";
@@ -17,7 +21,7 @@ const g = (s) => s.replaceAll('@{', '${').replace(/\s+\n/g, '\n');
 const SC = `(('@{scope}'='real' AND ExporterAddress != ${DEMO}) OR ('@{scope}'='demo' AND ExporterAddress = ${DEMO}) OR '@{scope}'='all')`;
 const REAL = `ExporterAddress != ${DEMO}`;
 const EX = `has([@{exporter:singlequote}], ExporterName)`;
-const IF = `(has([@{iface:singlequote}], InIfName) OR has([@{iface:singlequote}], OutIfName))`;
+const IF = `(has([@{interface:singlequote}], InIfName) OR has([@{interface:singlequote}], OutIfName))`;
 const DIRC = `multiIf(InIfBoundary = 'external' AND OutIfBoundary != 'external', 'inbound', OutIfBoundary = 'external' AND InIfBoundary != 'external', 'outbound', InIfBoundary = 'external' AND OutIfBoundary = 'external', 'transit', 'unclassified')`;
 const DIRL = `multiIf(InIfBoundary = 'external' AND OutIfBoundary != 'external', 'External → Internal', OutIfBoundary = 'external' AND InIfBoundary != 'external', 'Internal → External', InIfBoundary = 'external' AND OutIfBoundary = 'external', 'External → External', 'Unclassified')`;
 const DR = `('@{direction}'='all' OR ${DIRC}='@{direction}')`;
@@ -32,6 +36,18 @@ const RES = `default.@{res}`;
 const BK = `greatest(@{res_s}, $__interval_s)`;
 const BUCKET = `toStartOfInterval(TimeReceived, INTERVAL ${BK} SECOND)`;
 const BYTES = `sum(Bytes*SamplingRate)`;
+// Site / Device type "All" is the raw allValue `.*` (not quoted by the singlequote format), hence the csv + position test
+const ALLSEL = `position('@{site:csv}', '.*') > 0 AND position('@{device_group:csv}', '.*') > 0 AND arraySort([@{device:singlequote}]) = arraySort([@{site_hosts:singlequote}])`;
+// effective ExporterName set = selected inventory devices, plus exporters seen in flows that are not in the inventory when EVERYTHING is selected
+const EXPORTER_SET = `SELECT arrayJoin([@{device:singlequote}]) AS e UNION DISTINCT SELECT DISTINCT ExporterName AS e FROM default.flows_1h0m0s WHERE TimeReceived > now() - INTERVAL 30 DAY AND ${SC} AND ${ALLSEL} ORDER BY 1`;
+// one row per exporter in scope; Inventory = Configured (Zabbix host in the selection) / NOT IN INVENTORY; Status comes from flows only (no flows is NO DATA, never down)
+const EXSTATE = `SELECT l.exporter AS Exporter,
+  multiIf(r.ex = '', 'NO DATA', x.ex != '', 'ACTIVE', 'IDLE / NO RECENT FLOWS') AS Status,
+  if(has([@{device:singlequote}], l.exporter), 'Configured', 'NOT IN INVENTORY') AS Inventory,
+  if(x.ex != '', x.bps, 0) AS Traffic, if(x.ex != '', x.fps, 0) AS \`Flows/s\`, if(r.ex = '', NULL, if(x.ex != '', x.age, r.age)) AS \`Last flow\`
+  FROM (SELECT arrayJoin([@{exporter:singlequote}]) AS exporter) AS l
+  LEFT JOIN (SELECT ExporterName AS ex, dateDiff('second', max(TimeReceived), now()) AS age FROM default.flows_1m0s WHERE TimeReceived > now() - INTERVAL 7 DAY AND ${SC} GROUP BY ex) AS r ON l.exporter = r.ex
+  LEFT JOIN (SELECT ExporterName AS ex, ${BYTES}*8/300 AS bps, count()/300 AS fps, dateDiff('second', max(TimeReceived), now()) AS age FROM default.flows WHERE TimeReceived > now() - INTERVAL 5 MINUTE AND ${SC} GROUP BY ex) AS x ON l.exporter = x.ex`;
 const BPS = `${BYTES}*8/${BK}`;
 const ip = (c) => `replaceRegexpOne(IPv6NumToString(${c}), '^::ffff:', '')`;
 const SRCIP = `('@{src_ip}'='' OR ${ip('SrcAddr')}='@{src_ip}')`;
@@ -57,8 +73,9 @@ const unit = (name, u, dec) => col(name, [{ id: 'unit', value: u }, ...(dec !== 
 const share = (name = 'Share') => col(name, [{ id: 'unit', value: 'percent' }, { id: 'decimals', value: 1 }, { id: 'min', value: 0 }, { id: 'max', value: 100 },
   { id: 'custom.cellOptions', value: { type: 'gauge', mode: 'basic', valueDisplayMode: 'text' } }, { id: 'color', value: { mode: 'fixed', fixedColor: NEUTRAL } }, { id: 'custom.width', value: 150 }]);
 const width = (name, w) => col(name, [{ id: 'custom.width', value: w }]);
-const STATUS_MAP = { ACTIVE: { color: 'green', text: 'ACTIVE', index: 0 }, 'IDLE / NO RECENT FLOWS': { color: 'orange', text: 'IDLE / NO RECENT FLOWS', index: 1 }, UNKNOWN: { color: 'gray', text: 'UNKNOWN', index: 2 } };
+const STATUS_MAP = { ACTIVE: { color: 'green', text: 'ACTIVE', index: 0 }, 'IDLE / NO RECENT FLOWS': { color: 'orange', text: 'IDLE / NO RECENT FLOWS', index: 1 }, 'NO DATA': { color: '#8A94A3', text: 'NO DATA', index: 2 } };
 const statusCol = (name = 'Status') => col(name, [{ id: 'custom.cellOptions', value: { type: 'color-text' } }, { id: 'mappings', value: [{ type: 'value', options: STATUS_MAP }] }, { id: 'custom.width', value: 170 }]);
+const inventoryCol = (name = 'Inventory') => col(name, [{ id: 'custom.cellOptions', value: { type: 'color-text' } }, { id: 'mappings', value: [{ type: 'value', options: { Configured: { color: '#A9B4C2', text: 'Configured', index: 0 }, 'NOT IN INVENTORY': { color: '#5B9BD5', text: 'NOT IN INVENTORY', index: 1 } } }] }, { id: 'custom.width', value: 170 }]);
 
 const KPI_TEXT = { titleSize: 11, valueSize: 26 };
 const stat = (title, grid, sql, u, o = {}) => base('stat', title, grid, sql, FMT_TABLE, {
@@ -95,39 +112,31 @@ const rawNotice = (grid) => stat('Detail window', grid,
     1: { text: '⚠ Detailed IP / Port / Conversation data is limited to the latest 24 hours (selected range is longer).', color: 'orange', index: 1 } } }],
   noValue: '' });
 
-const statusKPI = (grid) => stat('STATUS', grid,
-  `SELECT multiIf(active > 0, 2, known > 0, 1, 0) AS s FROM (
-     SELECT uniqExactIf(ExporterAddress, TimeReceived > now() - INTERVAL 5 MINUTE AND ${SC}) AS active, uniqExactIf(ExporterAddress, ${SC}) AS known
-     FROM default.flows_1m0s WHERE TimeReceived > now() - INTERVAL 24 HOUR)`, 'none', {
-  description: 'REAL DATA = at least one real exporter sent flows in the last 5 minutes. IDLE = real exporters known, but no recent flows (not proof of failure). NO REAL EXPORTER DATA = nothing from a real exporter in 24 h.',
+const statusKPI = (grid) => stat('FLOW COLLECTION', grid,
+  `SELECT multiIf(countIf(Status = 'ACTIVE') > 0, 2, countIf(Status = 'IDLE / NO RECENT FLOWS') > 0, 1, 0) FROM (${EXSTATE})`, 'none', {
+  description: 'RECEIVING FLOWS = at least one exporter sent flows in the last 5 minutes. IDLE = exporters seen in the last 7 days, none in the last 5 minutes. NO FLOW DATA = no exporter has sent flows in 7 days (expected in a lab without traffic). Neither is an outage: router availability is on the Device Health dashboard.',
   colorMode: 'background', textMode: 'value', text: { valueSize: 18, titleSize: 11 },
   mappings: [{ type: 'value', options: {
-    2: { text: 'REAL DATA', color: 'green', index: 0 }, 1: { text: 'IDLE / NO RECENT FLOWS', color: 'orange', index: 1 }, 0: { text: 'NO REAL EXPORTER DATA', color: 'red', index: 2 } } }],
-  steps: [{ color: 'red', value: null }], noValue: 'NO REAL EXPORTER DATA' });
+    2: { text: 'RECEIVING FLOWS', color: 'green', index: 0 }, 1: { text: 'IDLE / NO RECENT FLOWS', color: '#5B7A99', index: 1 }, 0: { text: 'NO FLOW DATA', color: '#8A94A3', index: 2 } } }],
+  steps: [{ color: '#8A94A3', value: null }], noValue: 'NO FLOW DATA' });
 
+const exCount = (title, grid, expr, description, o = {}) => stat(title, grid, `SELECT ${expr} FROM (${EXSTATE})`, 'short', { description, decimals: 0, noValue: '0', ...o });
 const activeExp = (grid) => stat('ACTIVE EXPORTERS', grid,
-  `SELECT concat(toString(uniqExactIf(ExporterAddress, TimeReceived > now() - INTERVAL 5 MINUTE)), ' / ', toString(uniqExact(ExporterAddress))) AS v
-   FROM default.flows_1m0s WHERE TimeReceived > now() - INTERVAL 7 DAY AND ${SC}`, 'none', {
-  description: 'Exporters that sent flows in the last 5 minutes / exporters seen in the last 7 days.', textMode: 'value', noValue: '0 / 0' });
+  `SELECT concat(toString(countIf(Status = 'ACTIVE')), ' active · ', toString(countIf(Inventory = 'Configured')), ' configured') FROM (${EXSTATE})`, 'none', {
+  description: 'Exporters that sent flows in the last 5 minutes · devices configured in the Zabbix inventory for the selected scope.', textMode: 'value', noValue: '0 active · 0 configured', text: { valueSize: 18, titleSize: 11 } });
 
 const flowAge = (grid, title = 'LAST REAL FLOW') => stat(title, grid,
-  `SELECT dateDiff('second', max(TimeReceived), now()) AS age FROM default.flows WHERE TimeReceived > now() - INTERVAL 24 HOUR AND ${SC}`, 's', {
-  description: 'Seconds since the newest flow record (raw table, last 24 h, same data scope as every other panel).',
-  decimals: 0, steps: [{ color: 'green', value: null }, { color: 'orange', value: 300 }, { color: 'red', value: 3600 }], noValue: 'none in 24 h' });
+  `SELECT if(count() = 0, NULL, dateDiff('second', max(TimeReceived), now())) AS age FROM default.flows WHERE TimeReceived > now() - INTERVAL 24 HOUR AND ${SC}`, 's', {
+  description: 'Time since the newest flow record in the selected data scope (raw table, last 24 h). "No flows in 24 h" = nothing was received; it does not say a device is down.',
+  decimals: 0, steps: [{ color: 'green', value: null }, { color: '#5B7A99', value: 300 }], noValue: 'No flows in 24 h' });
 
-// exporter summary: status never DOWN from traffic alone
+// exporter summary: configured inventory + observed exporters, never "DOWN" from traffic alone
 const exporterSummary = (grid, o = {}) => table(o.title || 'Exporters', grid,
-  `SELECT r.exporter AS Exporter,
-          multiIf(isNull(r.age), 'UNKNOWN', ifNull(x.age, r.age) <= 300, 'ACTIVE', 'IDLE / NO RECENT FLOWS') AS Status,
-          ifNull(x.bps, 0) AS Traffic, ifNull(x.fps, 0) AS \`Flows/s\`, ifNull(x.age, r.age) AS \`Last flow\`
-   FROM (SELECT ExporterName AS exporter, dateDiff('second', max(TimeReceived), now()) AS age FROM default.flows_1m0s
-         WHERE TimeReceived > now() - INTERVAL 7 DAY AND ${SC} GROUP BY exporter) AS r
-   LEFT JOIN (SELECT ExporterName AS exporter, ${BYTES}*8/300 AS bps, count()/300 AS fps, dateDiff('second', max(TimeReceived), now()) AS age
-              FROM default.flows WHERE TimeReceived > now() - INTERVAL 5 MINUTE AND ${SC} GROUP BY exporter) AS x ON r.exporter = x.exporter
-   ORDER BY \`Last flow\``,
-  [statusCol(), unit('Traffic', 'bps', 1), unit('Flows/s', 'none', 2), unit('Last flow', 's', 0), width('Exporter', 110)],
-  { description: 'ACTIVE: flows in the last 5 min. IDLE / NO RECENT FLOWS: seen in the last 7 days but quiet — this is not proof of failure (NetFlow alone cannot prove a router is down). Traffic and flows/s are 5-minute averages.',
-    noValue: 'No exporter has sent flows in the last 7 days (for the selected data scope)' });
+  `SELECT Exporter, Status, Inventory, Traffic, \`Flows/s\`, \`Last flow\` FROM (${EXSTATE})
+   ORDER BY multiIf(Status = 'ACTIVE', 0, Status = 'IDLE / NO RECENT FLOWS', 1, 2), Exporter`,
+  [statusCol(), inventoryCol(), unit('Traffic', 'bps', 1), unit('Flows/s', 'none', 2), unit('Last flow', 's', 0), width('Exporter', 110)],
+  { description: 'Rows = devices configured in Zabbix for the selected scope plus any exporter seen in flows. ACTIVE: flows in the last 5 min. IDLE / NO RECENT FLOWS: seen in the last 7 days but quiet. NO DATA: configured but no flow seen in 7 days — this says nothing about the device being up or down (see Device Health). NOT IN INVENTORY: sends flows but is not a Zabbix host. Traffic and flows/s are 5-minute averages.',
+    noValue: '—' });
 
 // top-N list with share of total
 const topIP = (title, grid, col_, net, filter, linkVar) => table(title, grid,
@@ -175,8 +184,8 @@ const qvar = (name, label, sql) => ({ type: 'query', name, label, datasource: DS
 const hidden = (name, sql) => ({ type: 'query', name, datasource: DS, query: g(sql), definition: g(sql), refresh: 2, hide: 2, multi: false, includeAll: false, current: {}, options: [] });
 const V = {
   scope: custom('scope', 'Data scope', 'Real only : real,Demo only : demo,Real + demo : all', ['Real only', 'real'], 'Real = synthetic demo exporter excluded (default).'),
-  exporter: qvar('exporter', 'Exporter', `SELECT DISTINCT ExporterName FROM default.flows_1h0m0s WHERE TimeReceived > now() - INTERVAL 30 DAY AND ${SC} ORDER BY 1`),
-  iface: qvar('iface', 'Interface', `SELECT DISTINCT InIfName FROM default.flows_1h0m0s WHERE InIfName != '' AND TimeReceived > now() - INTERVAL 30 DAY AND ${SC} AND ${EX} UNION DISTINCT SELECT DISTINCT OutIfName FROM default.flows_1h0m0s WHERE OutIfName != '' AND TimeReceived > now() - INTERVAL 30 DAY AND ${SC} AND ${EX} ORDER BY 1`),
+  exporter: { ...qvar('exporter', 'Exporter', EXPORTER_SET), hide: 2 },
+  iface: qvar('interface', 'Interface', `SELECT DISTINCT InIfName FROM default.flows_1h0m0s WHERE InIfName != '' AND TimeReceived > now() - INTERVAL 30 DAY AND ${SC} AND ${EX} UNION DISTINCT SELECT DISTINCT OutIfName FROM default.flows_1h0m0s WHERE OutIfName != '' AND TimeReceived > now() - INTERVAL 30 DAY AND ${SC} AND ${EX} ORDER BY 1`),
   direction: custom('direction', 'Direction', 'All : all,External → Internal : inbound,Internal → External : outbound,External → External : transit,Unclassified : unclassified', ['All', 'all'], 'Derived from verified interface boundary metadata; never guessed.'),
   proto: custom('proto', 'Protocol', 'All : all,TCP : 6,UDP : 17,ICMP : 1', ['All', 'all']),
   src_ip: { type: 'textbox', name: 'src_ip', label: 'Source IP', query: '', current: { text: '', value: '' }, options: [{ text: '', value: '', selected: true }], hide: 0 },
@@ -184,14 +193,14 @@ const V = {
   res: hidden('res', `SELECT multiIf(@{__to:raw} - @{__from:raw} <= 43200000, 'flows_1m0s', @{__to:raw} - @{__from:raw} <= 604800000, 'flows_5m0s', 'flows_1h0m0s')`),
   res_s: hidden('res_s', `SELECT multiIf(@{__to:raw} - @{__from:raw} <= 43200000, 60, @{__to:raw} - @{__from:raw} <= 604800000, 300, 3600)`),
 };
-const std = [V.scope, V.exporter, V.iface, V.direction, V.proto];
+const std = [V.scope, siteVar(), deviceGroupVar(), siteHostsVar(), deviceVar(), V.exporter, V.iface, V.direction, V.proto];
 const stdH = [V.res, V.res_s];
 
 const dashboards = [];
 function dash(uid, title, refresh, from, vars, panels, description) {
-  dashboards.push({ uid, d: { uid, title, description, tags: ['netflow', 'netops'], timezone: 'browser', editable: true, graphTooltip: 1, schemaVersion: 39, version: 1,
+  dashboards.push({ uid, d: { uid, title, description, tags: ['netflow', 'netops'], timezone: 'browser', editable: true, graphTooltip: 1, schemaVersion: 39,
     refresh, time: { from, to: 'now' }, timepicker: { refresh_intervals: ['30s', '1m', '5m', '15m'] }, templating: { list: vars }, annotations: { list: [] }, panels,
-    links: [{ type: 'dashboards', title: 'NetFlow', tags: ['netflow'], asDropdown: false, includeVars: true, keepTime: true, icon: 'external link' }] } });
+    links: navLinks() } });
 }
 const DIR_OVERRIDES = [
   col('External → Internal', [{ id: 'color', value: { mode: 'fixed', fixedColor: '#5B9BD5' } }]),
@@ -279,20 +288,21 @@ const ifaceRow = (side) => {
   const role = `multiIf(${n} = '', 'Router', ${b} = 'external', 'External', ${b} = 'internal', 'Internal', 'Unclassified')`;
   const dir = side === 'in' ? `if(${b} = 'external', 'Inbound', 'Ingress')` : `if(${b} = 'external', 'Outbound', 'Egress')`;
   return `SELECT ExporterName AS Exporter, ${label} AS Interface, ${role} AS Role, ${dir} AS Direction, ${BYTES} AS bytes, count() AS flows, max(TimeReceived) AS lastts
-          FROM default.flows WHERE ${RAWT} AND ${FX} AND (${n} = '' OR has([@{iface:singlequote}], ${n})) GROUP BY Exporter, Interface, Role, Direction`;
+          FROM default.flows WHERE ${RAWT} AND ${FX} AND (${n} = '' OR has([@{interface:singlequote}], ${n})) GROUP BY Exporter, Interface, Role, Direction`;
 };
 dash('netflow-exporters', 'NetFlow | Exporters & Interfaces', '30s', 'now-6h', [...std, ...stdH], [
-  statusKPI(G(0, 0, 6, 3)), activeExp(G(6, 0, 6, 3)),
-  stat('SILENT EXPORTERS', G(12, 0, 6, 3),
-    `SELECT countIf(last < now() - INTERVAL 5 MINUTE) FROM (SELECT ExporterAddress, max(TimeReceived) AS last FROM default.flows_1m0s WHERE TimeReceived > now() - INTERVAL 7 DAY AND ${SC} GROUP BY ExporterAddress)`, 'short',
-    { description: 'Exporters seen in the last 7 days with no flows in the last 5 minutes. Idle is not proof of failure.', steps: [{ color: 'green', value: null }, { color: 'orange', value: 1 }], noValue: '0' }),
-  stat('FLOW RATE', G(18, 0, 6, 3), `SELECT count()/300 FROM default.flows WHERE TimeReceived > now() - INTERVAL 5 MINUTE AND ${SC} AND ${EX}`, 'suffix: flows/s', { noValue: '0 flows/s' }),
-  ts('Traffic by exporter', G(0, 3, 12, 7),
+  statusKPI(G(0, 0, 4, 3)),
+  exCount('CONFIGURED', G(4, 0, 4, 3), "countIf(Inventory = 'Configured')", 'Devices in the Zabbix inventory for the selected site / device type / device.', { fixed: '#C7D0DC' }),
+  exCount('ACTIVE', G(8, 0, 4, 3), "countIf(Status = 'ACTIVE')", 'Exporters that sent flows in the last 5 minutes.', { steps: [{ color: '#8A94A3', value: null }, { color: 'green', value: 1 }], colorMode: 'value' }),
+  exCount('IDLE', G(12, 0, 4, 3), "countIf(Status = 'IDLE / NO RECENT FLOWS')", 'Exporters seen in the last 7 days with no flows in the last 5 minutes. Idle is not proof of failure.', { steps: [{ color: '#8A94A3', value: null }, { color: 'orange', value: 1 }], colorMode: 'value' }),
+  exCount('NO DATA', G(16, 0, 4, 3), "countIf(Status = 'NO DATA')", 'Configured devices that have not sent a flow in the last 7 days. Their availability is on the Device Health dashboard.', { fixed: '#8A94A3' }),
+  exCount('NOT IN INVENTORY', G(20, 0, 4, 3), "countIf(Inventory = 'NOT IN INVENTORY')", 'Exporters sending flows that are not a Zabbix host (or are outside the selection when everything is selected). Add them to Zabbix to make them selectable.', { steps: [{ color: '#8A94A3', value: null }, { color: '#5B9BD5', value: 1 }], colorMode: 'value' }),
+  ts('Traffic by exporter', G(0, 10, 12, 7),
     `SELECT ${BUCKET} AS time, ExporterName AS exporter, ${BPS} AS bps FROM ${RES} WHERE ${TF} AND ${F} GROUP BY time, exporter ORDER BY time`, 'bps', { stack: true }),
-  ts('Traffic by ingress interface', G(12, 3, 12, 7),
+  ts('Traffic by ingress interface', G(12, 10, 12, 7),
     `SELECT ${BUCKET} AS time, concat(ExporterName, ' / ', if(InIfName = '', 'Router-local', InIfName)) AS interface, ${BPS} AS bps FROM ${RES} WHERE ${TF} AND ${F} GROUP BY time, interface ORDER BY time`, 'bps', { stack: true,
       description: 'Interface names come from static/SNMP metadata. "Unresolved interface" = no name known for that ifIndex.' }),
-  table('Interfaces (last ≤24 h)', G(0, 10, 24, 8),
+  table('Interfaces (last ≤24 h)', G(0, 17, 24, 8),
     `SELECT Exporter, Interface, Role, Direction, round(bytes*8/${RAWRNG}) AS Traffic, round(flows/${RAWRNG}, 3) AS \`Flows/s\`, dateDiff('second', lastts, now()) AS \`Last flow\` FROM (
        ${ifaceRow('in')} UNION ALL ${ifaceRow('out')}) ORDER BY bytes DESC LIMIT 20`,
     [unit('Traffic', 'bps', 1), unit('Flows/s', 'none', 2), unit('Last flow', 's', 0),
@@ -300,43 +310,54 @@ dash('netflow-exporters', 'NetFlow | Exporters & Interfaces', '30s', 'now-6h', [
       width('Exporter', 110), width('Role', 110), width('Direction', 100)],
     { noValue: 'No recent flows on any interface for the selected scope.',
       description: 'Role comes from verified interface boundary metadata. Router-local = traffic to/from the router itself (no output interface). Inbound/Outbound apply to external interfaces; Ingress/Egress to other interfaces. Utilization % is intentionally not shown: interface speed is not verified.' }),
-  exporterSummary(G(0, 18, 24, 5), { title: 'Exporter status' }),
+  exporterSummary(G(0, 3, 24, 7), { title: 'Exporter status' }),
 ], 'Which exporter sends, on which interface, and whether it is still sending.');
 
 // ================================================================= 5. Platform Health
+// Three separate questions, never mixed: is the PLATFORM (ClickHouse) healthy, is the COLLECTOR receiving flows, what is each EXPORTER doing.
+// Platform tiles ignore the selection; collector/exporter tiles follow the scope. Without traffic (a lab) the collector shows NO FLOW DATA and
+// exporters show NO DATA: that is "nothing to report", not an outage.
 nid = 1;
 const sysOne = (m) => `SELECT value FROM system.asynchronous_metrics WHERE metric = '${m}'`;
-dash('netflow-health', 'NetFlow | Platform Health', '30s', 'now-24h', [V.scope], [
-  stat('PIPELINE', G(0, 0, 4, 3),
-    `SELECT multiIf(age IS NULL, 0, age <= 300, 2, 1) FROM (SELECT min(dateDiff('second', TimeReceived, now())) AS age FROM default.flows WHERE TimeReceived > now() - INTERVAL 24 HOUR AND ${SC})`, 'none', {
-    description: 'FLOWING: a flow arrived in the last 5 minutes (exporters → inlet → Kafka → outlet → ClickHouse all working). IDLE: flows exist but none recently — can be an idle lab, not a failure. Container-level state: status.sh.',
-    colorMode: 'background', textMode: 'value', text: { valueSize: 18, titleSize: 11 },
-    mappings: [{ type: 'value', options: { 2: { text: 'FLOWING', color: 'green', index: 0 }, 1: { text: 'IDLE / NO RECENT FLOWS', color: 'orange', index: 1 }, 0: { text: 'UNKNOWN', color: 'gray', index: 2 } } }],
-    steps: [{ color: 'gray', value: null }], noValue: 'UNKNOWN' }),
+const collector = (grid) => stat('FLOW COLLECTION', grid,
+  `SELECT multiIf(count() = 0, 0, max(TimeReceived) > now() - INTERVAL 5 MINUTE, 2, 1) FROM default.flows WHERE TimeReceived > now() - INTERVAL 24 HOUR AND ${SC}`, 'none', {
+  description: 'RECEIVING FLOWS: a flow record arrived in the last 5 minutes. IDLE: flows exist in the last 24 h but none recently. NO FLOW DATA: nothing in 24 h (expected in a lab without traffic, not an outage). Container-level state of inlet / outlet / Kafka: status.sh.',
+  colorMode: 'background', textMode: 'value', text: { valueSize: 18, titleSize: 11 },
+  mappings: [{ type: 'value', options: { 2: { text: 'RECEIVING FLOWS', color: 'green', index: 0 }, 1: { text: 'IDLE / NO RECENT FLOWS', color: '#5B7A99', index: 1 }, 0: { text: 'NO FLOW DATA', color: '#8A94A3', index: 2 } } }],
+  steps: [{ color: '#8A94A3', value: null }], noValue: 'UNKNOWN' });
+dash('netflow-health', 'NetFlow | Platform Health', '30s', 'now-24h', [V.scope, siteVar(), deviceGroupVar(), siteHostsVar(), deviceVar(), V.exporter], [
+  collector(G(0, 0, 4, 3)),
   flowAge(G(4, 0, 4, 3), 'LAST REAL FLOW AGE'),
-  activeExp(G(8, 0, 4, 3)),
-  stat('CLICKHOUSE MEMORY', G(12, 0, 4, 3), sysOne('MemoryResident'), 'bytes', { decimals: 1, description: 'Resident memory; container cap 3 GiB.',
+  stat('CLICKHOUSE', G(8, 0, 4, 3), 'SELECT 1', 'none', { description: 'The datasource answers queries. Platform health, independent of the selection and of traffic.', colorMode: 'background', textMode: 'value', text: { valueSize: 18, titleSize: 11 },
+    mappings: [{ type: 'value', options: { 1: { text: 'ONLINE', color: 'green', index: 0 } } }], steps: [{ color: 'green', value: null }], noValue: 'UNKNOWN' }),
+  stat('CLICKHOUSE MEMORY', G(12, 0, 4, 3), sysOne('MemoryResident'), 'bytes', { decimals: 1, description: 'Resident memory; container cap 3 GiB. Independent of the selection.',
     steps: [{ color: 'green', value: null }, { color: 'orange', value: 2400000000 }, { color: 'red', value: 2900000000 }] }),
   stat('DISK UTILIZATION', G(16, 0, 4, 3), `SELECT round(100 * (total_space - free_space) / total_space, 1) FROM system.disks WHERE name = 'default'`, 'percent', { decimals: 1,
-    description: 'Data disk. Ingestion is frozen by disk-guard at 95 %.', steps: [{ color: 'green', value: null }, { color: 'orange', value: 70 }, { color: 'red', value: 85 }] }),
+    description: 'Data disk. Ingestion is frozen by disk-guard at 95 %. Independent of the selection.', steps: [{ color: 'green', value: null }, { color: 'orange', value: 70 }, { color: 'red', value: 85 }] }),
   stat('QUERY HEALTH (p95)', G(20, 0, 4, 3),
     `SELECT round(quantile(0.95)(query_duration_ms)) FROM system.query_log WHERE type = 'QueryFinish' AND user = 'grafana_ro' AND event_time > now() - INTERVAL 15 MINUTE`, 'ms', { decimals: 0,
-    description: 'p95 duration of Grafana queries in the last 15 minutes (limit is 30 s per query).', steps: [{ color: 'green', value: null }, { color: 'orange', value: 2000 }, { color: 'red', value: 10000 }], noValue: 'no queries' }),
-  ts('Ingestion rate', G(0, 3, 12, 7),
+    description: 'p95 duration of Grafana queries in the last 15 minutes (limit is 30 s per query). Independent of the selection.', steps: [{ color: 'green', value: null }, { color: 'orange', value: 2000 }, { color: 'red', value: 10000 }], noValue: 'no queries' }),
+  exCount('CONFIGURED EXPORTERS', G(0, 3, 4, 3), "countIf(Inventory = 'Configured')", 'Devices in the Zabbix inventory for the selected site / device type / device.', { fixed: '#C7D0DC' }),
+  exCount('OBSERVED (7 d)', G(4, 3, 4, 3), "countIf(Status != 'NO DATA')", 'Exporters that sent at least one flow in the last 7 days.', { fixed: '#C7D0DC' }),
+  exCount('ACTIVE (5 min)', G(8, 3, 4, 3), "countIf(Status = 'ACTIVE')", 'Exporters with flows in the last 5 minutes.', { steps: [{ color: '#8A94A3', value: null }, { color: 'green', value: 1 }], colorMode: 'value' }),
+  exCount('IDLE', G(12, 3, 4, 3), "countIf(Status = 'IDLE / NO RECENT FLOWS')", 'Seen in the last 7 days, quiet for 5 minutes. Not proof of failure.', { steps: [{ color: '#8A94A3', value: null }, { color: 'orange', value: 1 }], colorMode: 'value' }),
+  exCount('NO DATA', G(16, 3, 4, 3), "countIf(Status = 'NO DATA')", 'Configured devices that never sent a flow in 7 days. Their availability is on Device Health.', { fixed: '#8A94A3' }),
+  exCount('NOT IN INVENTORY', G(20, 3, 4, 3), "countIf(Inventory = 'NOT IN INVENTORY')", 'Sending flows but not a Zabbix host.', { steps: [{ color: '#8A94A3', value: null }, { color: '#5B9BD5', value: 1 }], colorMode: 'value' }),
+  ts('Ingestion rate', G(0, 6, 12, 7),
     `SELECT toStartOfInterval(TimeReceived, INTERVAL greatest(60, $__interval_s) SECOND) AS time, count()/greatest(60, $__interval_s) AS fps
      FROM default.flows WHERE ${RAWT} AND ${SC} GROUP BY time ORDER BY time`, 'suffix: flows/s', { decimals: 2, description: 'Flow records per second (raw table, latest ≤24 h).', noValue: 'No flows in the selected range' }),
-  ts('New flow data per hour', G(12, 3, 12, 7),
+  ts('New flow data per hour', G(12, 6, 12, 7),
     `SELECT toStartOfHour(modification_time) AS time, sum(bytes_on_disk) AS bytes FROM system.parts
      WHERE active AND database = 'default' AND table = 'flows' AND $__timeFilter(modification_time) GROUP BY time ORDER BY time`, 'bytes',
     { description: 'Approximation from part modification time (merges rewrite parts).', noValue: 'No new flow data in the selected range' }),
-  exporterSummary(G(0, 10, 10, 7), { title: 'Exporter freshness' }),
-  table('Data by table', G(10, 10, 6, 7),
+  exporterSummary(G(0, 13, 10, 7), { title: 'Exporter freshness' }),
+  table('Data by table', G(10, 13, 6, 7),
     `SELECT table AS Table, sum(bytes_on_disk) AS Size, round(100*sum(bytes_on_disk)/sum(sum(bytes_on_disk)) OVER (), 1) AS Share FROM system.parts
      WHERE active AND database = 'default' GROUP BY table ORDER BY Size DESC LIMIT 6`, [unit('Size', 'bytes', 1), share()], { noValue: 'No tables' }),
-  ts('Grafana query duration', G(16, 10, 8, 7),
+  ts('Grafana query duration', G(16, 13, 8, 7),
     `SELECT toStartOfInterval(event_time, INTERVAL 5 MINUTE) AS time, quantile(0.95)(query_duration_ms) AS p95, max(query_duration_ms) AS max
      FROM system.query_log WHERE type = 'QueryFinish' AND user = 'grafana_ro' AND $__timeFilter(event_time) GROUP BY time ORDER BY time`, 'ms', { decimals: 0, noValue: 'No Grafana queries in the selected range' }),
-], 'Pipeline freshness, ClickHouse health, storage growth and Grafana query cost. Container state (inlet/outlet/Kafka) is available only via status.sh.');
+], 'Platform (ClickHouse), flow collection and exporters are shown separately. Platform tiles ignore the selection; collector and exporter tiles follow the site / device selection. No traffic is "no data", not an outage. Container state (inlet/outlet/Kafka) is available only via status.sh.');
 
 mkdirSync('dashboards/netflow', { recursive: true });
 for (const { d } of dashboards) {
