@@ -8,6 +8,9 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../.." && pwd)
 SECRETS=${SECRETS:-$HOME/gp-secrets}
 PW=$(sudo cat /root/.rpt-grafana-pw)
+# dummy credentials of the ISOLATED test backends (the mock Zabbix and the test ClickHouse accept exactly these)
+CH_RO_PW=dummy-ro-pw-test
+ZBX_PW=dummy-zbx-pw
 G=http://127.0.0.1:3000
 mkdir -p "$SECRETS"; chmod 700 "$SECRETS"
 while read -r id ver _; do
@@ -19,8 +22,8 @@ for _ in $(seq 1 60); do curl -fsS -m 3 "$G/api/health" >/dev/null 2>&1 && break
 api() { curl -fsS -m 30 -u "admin:$PW" -H 'Content-Type: application/json' "$@"; }
 api -X POST "$G/api/plugins/alexanderzobnin-zabbix-app/settings" -d '{"enabled":true,"pinned":false}' >/dev/null || true
 ds() { api -X POST "$G/api/datasources" -d "$1" >/dev/null 2>&1 || api -X PUT "$G/api/datasources/uid/$2" -d "$1" >/dev/null; }
-ds '{"uid":"netflow-clickhouse","name":"NetFlow ClickHouse","type":"grafana-clickhouse-datasource","access":"proxy","jsonData":{"defaultDatabase":"default","dialTimeout":"10","host":"127.0.0.1","port":8123,"protocol":"http","secure":false,"username":"grafana_ro","queryTimeout":"30","validateSql":false},"secureJsonData":{"password":"dummy-ro-pw-test"}}' netflow-clickhouse
-ds '{"uid":"zabbix-lab","name":"Zabbix LAB","type":"alexanderzobnin-zabbix-datasource","access":"proxy","url":"http://127.0.0.1:18080/api_jsonrpc.php","isDefault":true,"jsonData":{"authType":"userLogin","trends":true,"cacheTTL":"1h","username":"grafana-ro","alerting":false},"secureJsonData":{"password":"dummy-zbx-pw"}}' zabbix-lab
+ds "{\"uid\":\"netflow-clickhouse\",\"name\":\"NetFlow ClickHouse\",\"type\":\"grafana-clickhouse-datasource\",\"access\":\"proxy\",\"jsonData\":{\"defaultDatabase\":\"default\",\"dialTimeout\":\"10\",\"host\":\"127.0.0.1\",\"port\":8123,\"protocol\":\"http\",\"secure\":false,\"username\":\"grafana_ro\",\"queryTimeout\":\"30\",\"validateSql\":false},\"secureJsonData\":{\"password\":\"$CH_RO_PW\"}}" netflow-clickhouse
+ds "{\"uid\":\"zabbix-lab\",\"name\":\"Zabbix LAB\",\"type\":\"alexanderzobnin-zabbix-datasource\",\"access\":\"proxy\",\"url\":\"http://127.0.0.1:18080/api_jsonrpc.php\",\"isDefault\":true,\"jsonData\":{\"authType\":\"userLogin\",\"trends\":true,\"cacheTTL\":\"1h\",\"username\":\"grafana-ro\",\"alerting\":false},\"secureJsonData\":{\"password\":\"$ZBX_PW\"}}" zabbix-lab
 mk_token() { # role name file
   local sa; sa=$(api "$G/api/serviceaccounts/search?query=$2" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);console.log((j.serviceAccounts||[]).find(x=>x.name===process.argv[1])?.id||"")})' "$2")
   [ -n "$sa" ] || sa=$(api -X POST "$G/api/serviceaccounts" -d "{\"name\":\"$2\",\"role\":\"$1\"}" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).id))')

@@ -114,8 +114,9 @@ export function pruneOutput(outDir, keepDays, nowMs, log = () => {}) {
 }
 
 // ---- delivery ----------------------------------------------------------------------------------------------------------------------
-const smtpOf = (s) => ({ host: s.email.smtp.host, port: s.email.smtp.port, security: s.email.smtp.security, username: s.email.smtp.username, password: s.email.smtp.password,
-  tlsOptions: s.email.smtp.tlsCa ? { ca: readFileSync(s.email.smtp.tlsCa) } : {} });
+// connection options for the channel clients, built from the validated settings (secrets were read from their files by settings.mjs)
+export const smtpOf = (s) => { const m = s.email.smtp; return { host: m.host, port: m.port, security: m.security, username: m.username, password: m.password, tlsOptions: m.tlsCa ? { ca: readFileSync(m.tlsCa) } : {} }; };
+export const tgOf = (s) => { const t = s.telegram; return { apiBase: t.apiBase, token: t.token, chatId: t.chatId }; };
 
 export async function deliverResults({ settings, results, win, force = false, demo = false, log = () => {}, deps = {}, channelPrefix = '' }) {
   const out = {};
@@ -133,7 +134,7 @@ export async function deliverResults({ settings, results, win, force = false, de
   }
   if (settings.telegram.enabled) {
     const content = { summaryHtml: telegramSummary({ date: win.date, models, demo }), documents: files.map((f, i) => ({ filename: f.filename, data: f.data, caption: `<b>${models[i].kind === 'netflow' ? 'NetFlow' : 'Interface traffic'}</b> - ${win.date}` })) };
-    const tg = { apiBase: settings.telegram.apiBase, token: settings.telegram.token, chatId: settings.telegram.chatId };
+    const tg = tgOf(settings);
     out.telegram = await deliver({ ...base, channel: `${channelPrefix}telegram`, units: telegramUnits(content), contentHash, sendBatch: telegramBatch(tg, content) });
   }
   return out;
@@ -152,7 +153,8 @@ async function notifyFailure({ settings, win, error, log, deps }) {
 export async function runDaily({ settings, now = Date.now(), date = null, kinds = null, force = false, noDeliver = false, demo = null, keepHtml = false, log = () => {}, deps = {} }) {
   const win = date ? windowForDate(date) : previousDayWindow(now);
   const prevWin = windowForDate(new Date(win.startMs - 86400e3 + 3 * 3600e3).toISOString().slice(0, 10));
-  const g = deps.grafana || new Grafana({ url: settings.grafana.url, token: settings.grafana.token });
+  const gr = settings.grafana;
+  const g = deps.grafana || new Grafana({ url: gr.url, token: gr.token });
   const selected = (kinds || settings.kinds);
   log({ event: 'run-start', date: win.date, kinds: selected, demo: !!demo, force });
   // Every enabled channel already delivered this day (timer fired twice, manual repeat): nothing to do, and no reason to query Grafana again.

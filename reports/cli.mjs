@@ -21,7 +21,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync, spawn } from 'node:child_process';
 import { loadSettings, validateSettings, parseEnv } from './lib/settings.mjs';
-import { runDaily, makeLogger, DASH_UID, slimModel, deliverResults } from './lib/generate.mjs';
+import { runDaily, makeLogger, DASH_UID, slimModel, deliverResults, smtpOf, tgOf } from './lib/generate.mjs';
 import { Grafana } from './lib/grafana-client.mjs';
 import { loadInterfaceConfig } from './lib/config.mjs';
 import { netflowDashboard, interfaceDashboard, liveRevision, FOLDER } from './lib/dashboards.mjs';
@@ -93,7 +93,7 @@ async function main() {
       if (wantEmail) {
         if (!settings.email.enabled) fail('EMAIL_ENABLED is not true in the settings');
         const to = flags.to && flags.to !== true ? String(flags.to).split(',').map((x) => x.trim()) : settings.email.to;
-        const smtp = { host: settings.email.smtp.host, port: settings.email.smtp.port, security: settings.email.smtp.security, username: settings.email.smtp.username, password: settings.email.smtp.password, tlsOptions: settings.email.smtp.tlsCa ? { ca: readFileSync(settings.email.smtp.tlsCa) } : {} };
+        const smtp = smtpOf(settings);
         const content = { from: settings.email.from, subject: '[TEST] Grafana report delivery test (DEMO data)', text: 'This is a delivery test sent by grafana-report. The attached PDFs contain synthetic DEMO data only. No action is needed.',
           html: '<p style="font-family:Arial,sans-serif;font-size:14px"><b>[TEST] Grafana report delivery test</b></p><p style="font-family:Arial,sans-serif;font-size:13px">This message was sent by <code>grafana-report test-delivery</code>. The attached PDFs contain synthetic <b>DEMO</b> data only. No action is needed.</p>',
           attachments: samples.map((s) => ({ filename: s.filename, contentType: 'application/pdf', data: s.data })) };
@@ -104,7 +104,7 @@ async function main() {
       if (wantTg) {
         if (!settings.telegram.enabled) fail('TELEGRAM_ENABLED is not true in the settings');
         const content = { summaryHtml: '<b>[TEST] Grafana report delivery test</b>\nSample PDFs with synthetic DEMO data are attached. No action is needed.', documents: samples.map((s) => ({ filename: s.filename, data: s.data, caption: 'DEMO test document' })) };
-        const r = await deliver({ ...base, channel: 'test-telegram', units: telegramUnits(content), sendBatch: telegramBatch({ apiBase: settings.telegram.apiBase, token: settings.telegram.token, chatId: settings.telegram.chatId }, content) });
+        const r = await deliver({ ...base, channel: 'test-telegram', units: telegramUnits(content), sendBatch: telegramBatch(tgOf(settings), content) });
         console.log(`telegram test: ${r.status}`);
         if (r.status !== 'sent') worst = 3;
       }
@@ -129,7 +129,8 @@ async function main() {
         line(r.status === 0, `Chromium: ${(r.stdout || r.stderr || '').trim().split('\n')[0] || 'no output'}`);
       } catch (e) { line(false, `Chromium: ${e.message}`); }
       if (settings.grafana.token) {
-        const g = new Grafana({ url: settings.grafana.url, token: settings.grafana.token });
+        const gr = settings.grafana;
+        const g = new Grafana({ url: gr.url, token: gr.token });
         try { const h = await g.health(); line(true, `Grafana reachable, version ${h.version}`); } catch (e) { line(false, `Grafana: ${e.message}`); }
         for (const [kind, uid] of Object.entries(DASH_UID)) {
           try {
@@ -170,7 +171,8 @@ async function main() {
     case 'discover': {
       const url = process.env.ZABBIX_URL || fail('set ZABBIX_URL (…/api_jsonrpc.php)');
       const tf = process.env.ZABBIX_TOKEN_FILE || fail('set ZABBIX_TOKEN_FILE (a READ-ONLY Zabbix API token)');
-      const cands = await discoverInterfaces(zabbixCaller({ url, token: readFileSync(tf, 'utf8').trim() }));
+      const zt = readFileSync(tf, 'utf8').trim();
+      const cands = await discoverInterfaces(zabbixCaller({ url, token: zt }));
       if (flags.compare) {
         const r = compareConfig(readFileSync(flags.compare, 'utf8'), cands);
         r.ok.forEach((k) => console.log(`[ OK ] ${k}`));

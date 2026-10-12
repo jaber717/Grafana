@@ -171,6 +171,20 @@ news_feed_enabled = false
 mode = console file
 level = info
 EOF
+  # Optional EXTERNAL image renderer for the daily reports (docs/DAILY-REPORTS.md). Off unless RENDERING_SERVER_URL is set; no Chromium is ever
+  # needed on this server. The shared secret is read from a file, never written into grafana.ini.
+  if [ -n "${RENDERING_SERVER_URL:-}" ]; then
+    [ -n "${RENDERING_CALLBACK_URL:-}" ] || die "RENDERING_SERVER_URL is set but RENDERING_CALLBACK_URL is empty (the URL the renderer uses to reach this Grafana)"
+    [ -f "${RENDERING_TOKEN_FILE:-/nonexistent}" ] || die "RENDERING_TOKEN_FILE does not exist (it holds the token shared with the renderer's AUTH_TOKEN)"
+    cat >> "$new" <<EOF
+
+[rendering]
+server_url = $RENDERING_SERVER_URL
+callback_url = $RENDERING_CALLBACK_URL
+renderer_token = \$__file{$RENDERING_TOKEN_FILE}
+concurrent_render_request_limit = 4
+EOF
+  fi
   if ! cmp -s "$new" "$GRAFANA_ETC/grafana.ini"; then install -m 0640 -o root -g grafana "$new" "$GRAFANA_ETC/grafana.ini"; CONFIG_CHANGED=1; pass "grafana.ini rendered ($GRAFANA_PROTOCOL, port $GRAFANA_HTTP_PORT)"; else pass "grafana.ini already up to date"; fi
   rm -f "$new"; restorecon -F "$GRAFANA_ETC/grafana.ini" >/dev/null 2>&1 || true
 }

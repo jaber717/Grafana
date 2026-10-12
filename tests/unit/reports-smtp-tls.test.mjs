@@ -18,11 +18,12 @@ try {
   pki = { key: readFileSync(join(d, 'k.pem')), cert: readFileSync(join(d, 'c.pem')), otherCert: readFileSync(join(other, 'c.pem')), cleanup: () => { rmSync(d, { recursive: true }); rmSync(other, { recursive: true }); } };
 } catch { /* no openssl */ }
 const opts = { skip: pki ? false : 'openssl not available' };
+const PW = 'pw-ok-1';
 const msg = { from: 'NOC <noc@example.test>', to: ['a@example.test'], subject: 'TLS test', text: 't', html: '<p>t</p>', attachments: [] };
 
 test('STARTTLS: the connection is upgraded before MAIL, the certificate is verified, and credentials travel only inside TLS', opts, async () => {
-  const smtp = await startSmtpMock({ tls: { key: pki.key, cert: pki.cert }, requireAuth: { user: 'u', pass: 'right-password' } });
-  const r = await sendMail({ host: '127.0.0.1', port: smtp.port, security: 'starttls', username: 'u', password: 'right-password', tlsOptions: { ca: pki.cert } }, msg);
+  const smtp = await startSmtpMock({ tls: { key: pki.key, cert: pki.cert }, requireAuth: { user: 'u', pass: PW } });
+  const r = await sendMail({ host: '127.0.0.1', port: smtp.port, security: 'starttls', username: 'u', password: PW, tlsOptions: { ca: pki.cert } }, msg);
   assert.deepEqual(r.accepted, ['a@example.test']);
   assert.equal(smtp.state.tlsHandshakes, 1);
   assert.deepEqual(smtp.state.ehloSecure, [false, true], 'EHLO again after the upgrade; the first EHLO was in clear');
