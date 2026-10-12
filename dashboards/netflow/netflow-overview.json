@@ -279,6 +279,42 @@
         ]
       },
       {
+        "type": "textbox",
+        "name": "src_ip",
+        "label": "Source IP",
+        "query": "",
+        "current": {
+          "text": "",
+          "value": ""
+        },
+        "options": [
+          {
+            "text": "",
+            "value": "",
+            "selected": true
+          }
+        ],
+        "hide": 0
+      },
+      {
+        "type": "textbox",
+        "name": "dst_ip",
+        "label": "Dest IP",
+        "query": "",
+        "current": {
+          "text": "",
+          "value": ""
+        },
+        "options": [
+          {
+            "text": "",
+            "value": "",
+            "selected": true
+          }
+        ],
+        "hide": 0
+      },
+      {
         "type": "query",
         "name": "res",
         "datasource": {
@@ -458,7 +494,7 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": ""
+          "fields": "/.*/"
         },
         "colorMode": "value",
         "graphMode": "none",
@@ -955,7 +991,7 @@
               },
               {
                 "id": "custom.width",
-                "value": 170
+                "value": 210
               }
             ]
           },

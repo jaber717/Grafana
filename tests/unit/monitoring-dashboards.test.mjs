@@ -101,3 +101,17 @@ test('netflow health: no 57-year flow age, no phantom FLOWING, platform tiles ig
   const col = h.panels.find((p) => p.title === 'FLOW COLLECTION');
   assert.ok(!JSON.stringify(col.fieldConfig).includes('"red"'), 'no red for "no traffic"');
 });
+
+test('every ${variable} used by a NetFlow or NOC dashboard is defined by that dashboard (an undefined one stays literal text in Grafana and silently breaks the query)', async () => {
+  const { readdirSync } = await import('node:fs');
+  for (const dir of ['netflow', 'noc']) {
+    for (const f of readdirSync(join(ROOT, 'dashboards', dir)).filter((x) => x.endsWith('.json'))) {
+      const d = rd(`dashboards/${dir}/${f}`);
+      const defined = new Set(d.templating.list.map((v) => v.name));
+      // the original panels kept in the collapsed legacy row use '$A'-style expression references, not variables
+      const text = JSON.stringify([d.panels.filter((p) => !(p.type === 'row' && /^Original /.test(p.title))), d.templating.list.map((v) => v.query)]);
+      const used = new Set([...text.matchAll(/\$\{?(\w+)/g)].map((m) => m[1]).filter((n) => !n.startsWith('__') && !/^\d+$/.test(n)));   // $1 in renameByRegex patterns is a capture group
+      for (const n of used) assert.ok(defined.has(n), `${dir}/${f}: \${${n}} is used but not defined`);
+    }
+  }
+});

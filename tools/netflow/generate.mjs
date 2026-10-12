@@ -74,7 +74,7 @@ const share = (name = 'Share') => col(name, [{ id: 'unit', value: 'percent' }, {
   { id: 'custom.cellOptions', value: { type: 'gauge', mode: 'basic', valueDisplayMode: 'text' } }, { id: 'color', value: { mode: 'fixed', fixedColor: NEUTRAL } }, { id: 'custom.width', value: 150 }]);
 const width = (name, w) => col(name, [{ id: 'custom.width', value: w }]);
 const STATUS_MAP = { ACTIVE: { color: 'green', text: 'ACTIVE', index: 0 }, 'IDLE / NO RECENT FLOWS': { color: 'orange', text: 'IDLE / NO RECENT FLOWS', index: 1 }, 'NO DATA': { color: '#8A94A3', text: 'NO DATA', index: 2 } };
-const statusCol = (name = 'Status') => col(name, [{ id: 'custom.cellOptions', value: { type: 'color-text' } }, { id: 'mappings', value: [{ type: 'value', options: STATUS_MAP }] }, { id: 'custom.width', value: 170 }]);
+const statusCol = (name = 'Status') => col(name, [{ id: 'custom.cellOptions', value: { type: 'color-text' } }, { id: 'mappings', value: [{ type: 'value', options: STATUS_MAP }] }, { id: 'custom.width', value: 210 }]);
 const inventoryCol = (name = 'Inventory') => col(name, [{ id: 'custom.cellOptions', value: { type: 'color-text' } }, { id: 'mappings', value: [{ type: 'value', options: { Configured: { color: '#A9B4C2', text: 'Configured', index: 0 }, 'NOT IN INVENTORY': { color: '#5B9BD5', text: 'NOT IN INVENTORY', index: 1 } } }] }, { id: 'custom.width', value: 170 }]);
 
 const KPI_TEXT = { titleSize: 11, valueSize: 26 };
@@ -82,7 +82,7 @@ const stat = (title, grid, sql, u, o = {}) => base('stat', title, grid, sql, FMT
   description: o.description,
   fieldConfig: { defaults: { unit: u, decimals: o.decimals, mappings: o.mappings || [], color: { mode: o.steps ? 'thresholds' : 'fixed', fixedColor: o.fixed || '#C7D0DC' },
     thresholds: { mode: 'absolute', steps: o.steps || [{ color: 'blue', value: null }] }, noValue: o.noValue || '—' }, overrides: [] },
-  options: { reduceOptions: { values: false, calcs: ['lastNotNull'], fields: '' }, colorMode: o.colorMode || 'value', graphMode: o.graph ? 'area' : 'none',
+  options: { reduceOptions: { values: false, calcs: ['lastNotNull'], fields: o.fields || '' }, colorMode: o.colorMode || 'value', graphMode: o.graph ? 'area' : 'none',
     justifyMode: 'center', textMode: o.textMode || 'auto', orientation: 'auto', text: o.text || KPI_TEXT },
 });
 
@@ -123,7 +123,7 @@ const statusKPI = (grid) => stat('FLOW COLLECTION', grid,
 const exCount = (title, grid, expr, description, o = {}) => stat(title, grid, `SELECT ${expr} FROM (${EXSTATE})`, 'short', { description, decimals: 0, noValue: '0', ...o });
 const activeExp = (grid) => stat('ACTIVE EXPORTERS', grid,
   `SELECT concat(toString(countIf(Status = 'ACTIVE')), ' active · ', toString(countIf(Inventory = 'Configured')), ' configured') FROM (${EXSTATE})`, 'none', {
-  description: 'Exporters that sent flows in the last 5 minutes · devices configured in the Zabbix inventory for the selected scope.', textMode: 'value', noValue: '0 active · 0 configured', text: { valueSize: 18, titleSize: 11 } });
+  description: 'Exporters that sent flows in the last 5 minutes · devices configured in the Zabbix inventory for the selected scope.', textMode: 'value', fields: '/.*/', noValue: '0 active · 0 configured', text: { valueSize: 18, titleSize: 11 } });
 
 const flowAge = (grid, title = 'LAST REAL FLOW') => stat(title, grid,
   `SELECT if(count() = 0, NULL, dateDiff('second', max(TimeReceived), now())) AS age FROM default.flows WHERE TimeReceived > now() - INTERVAL 24 HOUR AND ${SC}`, 's', {
@@ -214,7 +214,7 @@ const dirSeries = (title, grid, desc) => ts(title, grid,
 
 // ================================================================= 1. NOC Overview
 nid = 1;
-dash('netflow-overview', 'NetFlow | NOC Overview', '30s', 'now-6h', [...std, ...stdH], [
+dash('netflow-overview', 'NetFlow | NOC Overview', '30s', 'now-6h', [...std, V.src_ip, V.dst_ip, ...stdH], [
   statusKPI(G(0, 0, 4, 3)), activeExp(G(4, 0, 4, 3)),
   stat('CURRENT TRAFFIC', G(8, 0, 4, 3), `SELECT ${BYTES}*8/300 AS bps FROM default.flows_1m0s WHERE TimeReceived > now() - INTERVAL 5 MINUTE AND ${F}`, 'bps', { decimals: 1, description: '5-minute average.', noValue: '0 bps' }),
   stat('PEAK TRAFFIC', G(12, 0, 4, 3), `SELECT max(bps) FROM (SELECT ${BUCKET} AS t, ${BPS} AS bps FROM ${RES} WHERE ${TF} AND ${F} GROUP BY t)`, 'bps', { decimals: 1, description: 'Highest rate in the selected range.', noValue: '0 bps' }),

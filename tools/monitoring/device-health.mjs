@@ -23,6 +23,7 @@ const zq = (refId, item, aliasName, fns = []) => ({
   item: { filter: item }, functions: [...fns, ...(aliasName ? [alias(aliasName)] : [])], options: { showDisabledItems: false }, resultFormat: 'time_series',
 });
 
+const gb = (interval, agg) => ({ def: { name: 'groupBy', category: 'Transform', params: [{ name: 'interval', type: 'string' }, { name: 'function', options: ['avg', 'min', 'max', 'sum', 'count', 'median', 'first', 'last'], type: 'string' }], defaultParams: ['1m', 'avg'] }, params: [interval, agg], added: false });
 const PING = '/^ICMP ping$/', SNMP = '/^SNMP agent availability$/', CPU = '/CPU utilization/', MEM = '/Memory utilization/';
 const pct = (extra = {}) => ({ unit: 'percent', decimals: 0, min: 0, max: 100, noValue: '—', thresholds: { mode: 'absolute', steps: [{ color: COLORS.up, value: null }, { color: COLORS.unknown, value: 70 }, { color: COLORS.down, value: 90 }] }, ...extra });
 const colour = (c, text, index) => ({ color: c, text, index });
@@ -129,12 +130,13 @@ function attentionTable(y) {
 
 function timeline(y) {
   return {
-    id: IDS.timeline, type: 'state-timeline', title: 'Availability timeline (ICMP)', gridPos: { x: 15, y, w: 9, h: 10 }, datasource: DS.zabbix,
-    description: 'ICMP reachability of each selected device over the selected time range. A gap means no data was collected (NOT the same as DOWN).',
-    targets: [zq('A', PING, null)],
+    id: IDS.timeline, type: 'status-history', title: 'Availability timeline (ICMP)', gridPos: { x: 15, y, w: 9, h: 10 }, datasource: DS.zabbix,
+    description: 'ICMP reachability of each selected device over the selected time range. One cell per 10 minutes (DOWN if any ping in it failed). An empty stretch means nothing was collected (a stale or missing collection, NOT the same as DOWN).',
+    // one cell per 10 minutes, DOWN when any ping in the cell failed; no cell where nothing was collected (status-history refuses more than a few hundred points)
+    targets: [zq('A', PING, null, [gb('10m', 'min')])],
     fieldConfig: { defaults: { displayName: '${__field.labels.host}', noValue: 'NO DATA', color: { mode: 'thresholds' },
-      mappings: [{ type: 'value', options: { 1: colour(COLORS.up, 'UP', 0), 0: colour(COLORS.down, 'DOWN', 1) } }], thresholds: { mode: 'absolute', steps: [{ color: COLORS.nodata, value: null }] }, custom: { fillOpacity: 85, lineWidth: 0 } }, overrides: [] },
-    options: { mergeValues: true, showValue: 'never', alignValue: 'center', rowHeight: 0.8, legend: { showLegend: false }, tooltip: { mode: 'single' } },
+      mappings: [{ type: 'range', options: { from: 0.5, to: 1, result: colour(COLORS.up, 'UP', 0) } }, { type: 'range', options: { from: 0, to: 0.4999, result: colour(COLORS.down, 'DOWN', 1) } }], thresholds: { mode: 'absolute', steps: [{ color: COLORS.down, value: null }, { color: COLORS.up, value: 0.5 }] }, custom: { fillOpacity: 90, lineWidth: 0 } }, overrides: [] },
+    options: { showValue: 'never', rowHeight: 0.8, colWidth: 1, cellGap: 0, legend: { showLegend: false }, tooltip: { mode: 'single' } },
   };
 }
 
@@ -144,7 +146,7 @@ function explorer(y) {
     description: 'Choose one or several metrics with the Metric selector; every selected device is drawn so devices can be compared.',
     targets: [{ ...zq('A', '/$metric/', null), item: { filter: '/$metric/' } }],
     fieldConfig: { defaults: { displayName: '${__field.labels.host} · ${__field.labels.item}', unit: 'percent', min: 0, max: 100, noValue: 'NO DATA for the selected devices and metric',
-      custom: { drawStyle: 'line', lineWidth: 1.5, fillOpacity: 8, showPoints: 'never', spanNulls: false, axisBorderShow: false } },
+      custom: { drawStyle: 'line', lineWidth: 1.5, fillOpacity: 0, showPoints: 'never', spanNulls: false, axisBorderShow: false } },
     overrides: [{ matcher: { id: 'byRegexp', options: '.*ICMP ping.*' }, properties: [prop('unit', 'none'), prop('max', 1), prop('custom.lineInterpolation', 'stepAfter'), prop('custom.axisPlacement', 'right'), prop('custom.axisLabel', 'Availability (1 = UP)'),
       prop('mappings', [{ type: 'value', options: { 1: colour(COLORS.up, 'UP', 0), 0: colour(COLORS.down, 'DOWN', 1) } }])] }] },
     options: { legend: { displayMode: 'table', placement: 'bottom', showLegend: true, calcs: ['lastNotNull', 'mean', 'max'] }, tooltip: { mode: 'multi', sort: 'desc' } },
@@ -155,15 +157,13 @@ function explorer(y) {
 export function buildDeviceHealth(base) {
   const legacy = base.panels.map((p) => ({ ...p, gridPos: { ...p.gridPos, y: 31 + p.gridPos.y } }));
   const metric = customVar('metric', 'Metric', 'CPU, Memory and/or Availability for the metric explorer. Only metrics that are monitored on the selected devices return data.',
-    [['CPU', 'CPU utilization'], ['Memory', 'Memory utilization'], ['Availability (ICMP)', 'ICMP ping']], { multi: true, current: [{ text: 'CPU', value: 'CPU utilization' }, { text: 'Memory', value: 'Memory utilization' }] });
+    [['CPU', 'CPU utilization'], ['Memory', 'Memory utilization'], ['Availability (ICMP)', 'ICMP ping']], { multi: true, current: [{ text: 'CPU', value: 'CPU utilization' }] });
   const panels = [
     ...kpiPanels(0), statusTable(4), timeline(4), attentionTable(14), explorer(20),
     { id: IDS.legacyRow, type: 'row', title: 'Original router wall (fixed set of routers, not filtered by the selectors)', collapsed: true, gridPos: { x: 0, y: 30, w: 24, h: 1 }, panels: legacy },
-    { id: IDS.helperRow, type: 'row', title: 'Data behind the status table (do not edit)', collapsed: false, gridPos: { x: 0, y: 31 + 1000, w: 24, h: 1 }, panels: [] },
-    ...helperPanels(32),
+    // the three tables the status table is built from; collapsed so they stay out of the way (Grafana still runs them for the panels that read them)
+    { id: IDS.helperRow, type: 'row', title: 'Data behind the status table (do not edit)', collapsed: true, gridPos: { x: 0, y: 31, w: 24, h: 1 }, panels: helperPanels(32) },
   ];
-  // the open helper row must come right after the collapsed one: fix its y
-  panels.find((p) => p.id === IDS.helperRow).gridPos.y = 31;
   return {
     ...base,
     description: `${base.description}\n\nUnified scope (Site / Device type / Device / Metric): the section above the collapsed row follows the selectors; the collapsed row keeps the original fixed router wall unchanged.`,

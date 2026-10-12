@@ -2,7 +2,7 @@
 // default variable values ("All"), over the last 30 days, and reports queries that fail. It reads dashboards from the LIVE Grafana, so it tests what
 // is deployed. READ-ONLY (queries only). The data may be empty (an idle collector is normal): an empty result is PASS, a SQL/permission error is FAIL.
 // Variable interpolation approximates Grafana's frontend (${var}, ${var:raw}, ${var:singlequote}, ${__from:raw}, ${__to:raw}, $__interval_s).
-//   node tools/panel-smoke.mjs [--uid netflow-overview] [--range 30d]
+//   node tools/panel-smoke.mjs [--uid netflow-overview] [--range 30d] [--devices SITE-A,SITE-B]
 // Environment: GRAFANA_URL, GRAFANA_USER, GRAFANA_PASSWORD (or GRAFANA_TOKEN), GRAFANA_CA_FILE / GRAFANA_CONNECT_ADDR as for the other tools.
 import { get, api, parseArgs } from '../scripts/lib/grafana.mjs';
 
@@ -15,7 +15,9 @@ const uids = args.uid ? [args.uid] : (await get('/api/search?type=dash-db')).fil
 const dsQuery = (queries) => api('POST', '/api/ds/query', { queries, from: String(from), to: String(to) });
 const column = (r, ref) => (r?.results?.[ref]?.frames || []).flatMap((f) => f.data?.values?.[0] || []);
 
-const fmtValues = (vals, fmt) => (fmt === 'singlequote' ? vals.map((v) => `'${String(v).replace(/'/g, "\\'")}'`).join(',') : vals.join(','));
+// Zabbix-backed selectors (site, device_group, site_hosts, device) are frontend-only: --devices stands in for the inventory (default: two names)
+const DEVICES = (args.devices || 'SITE-A,SITE-B').split(',');
+const fmtValues = (vals, fmt) => (fmt === 'csv' ? vals.join(',') : fmt === 'singlequote' ? vals.map((v) => `'${String(v).replace(/'/g, "\\'")}'`).join(',') : vals.join(','));
 function interpolate(sql, vars) {
   const builtin = { __from: from, __to: to, __interval_s: 60, __interval: '60s' };
   return sql
@@ -29,6 +31,7 @@ for (const uid of uids) {
   const vars = {};
   for (const v of dash.templating?.list || []) {
     const cur = v.current?.value;
+    if (v.datasource?.type === 'alexanderzobnin-zabbix-datasource') { vars[v.name] = ['site', 'device_group'].includes(v.name) ? ['.*'] : DEVICES; continue; }
     if (v.type === 'query' && v.datasource?.uid === 'netflow-clickhouse') {
       const sql = interpolate(typeof v.query === 'string' ? v.query : v.query?.query, vars);
       try {

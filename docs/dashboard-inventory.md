@@ -7,7 +7,7 @@
 | netflow | `netflow-asn` | NetFlow | ASN & Internet | 11 | 11 | 1m | now-24h to now | Zabbix LAB, NetFlow ClickHouse |
 | netflow | `netflow-exporters` | NetFlow | Exporters & Interfaces | 10 | 11 | 30s | now-6h to now | Zabbix LAB, NetFlow ClickHouse |
 | netflow | `netflow-health` | NetFlow | Platform Health | 17 | 6 | 30s | now-24h to now | Zabbix LAB, NetFlow ClickHouse |
-| netflow | `netflow-overview` | NetFlow | NOC Overview | 16 | 11 | 30s | now-6h to now | Zabbix LAB, NetFlow ClickHouse |
+| netflow | `netflow-overview` | NetFlow | NOC Overview | 16 | 13 | 30s | now-6h to now | Zabbix LAB, NetFlow ClickHouse |
 | netflow | `netflow-top-talkers` | NetFlow | Top Talkers | 13 | 13 | 1m | now-1h to now | Zabbix LAB, NetFlow ClickHouse |
 | noc | `noc-device-health` | NOC — Device Health | 23 | 5 | 30s | now-6h to now | Zabbix LAB, NOC Inventory (local) |
 | noc | `noc-wan-overview` | NOC — WAN Overview | 15 | 8 | 30s | now-6h to now | Zabbix LAB |
@@ -81,7 +81,7 @@ Tags: netflow, netops. Variables: `scope`, `site`, `device_group`, `site_hosts`,
 
 Ten-second operational overview. Real traffic only by default.
 
-Tags: netflow, netops. Variables: `scope`, `site`, `device_group`, `site_hosts`, `device`, `exporter`, `interface`, `direction`, `proto`, `res`, `res_s`.
+Tags: netflow, netops. Variables: `scope`, `site`, `device_group`, `site_hosts`, `device`, `exporter`, `interface`, `direction`, `proto`, `src_ip`, `dst_ip`, `res`, `res_s`.
 
 | Panel | Type |
 |---|---|
@@ -141,7 +141,7 @@ Tags: netops, device-health. Variables: `site`, `device_group`, `site_hosts`, `d
 | NO DATA | stat |
 | NOT MONITORED | stat |
 | Device status | table |
-| Availability timeline (ICMP) | state-timeline |
+| Availability timeline (ICMP) | status-history |
 | Devices requiring attention | table |
 | Metric explorer - ${metric} | timeseries |
 | STC | stat |

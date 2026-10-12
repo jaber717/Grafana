@@ -66,16 +66,15 @@ function kpis() {
 function charts() {
   const bwTargets = [zq('A', IF('Bits ($direction)'))];
   return [
-    { id: IDS.bw, type: 'timeseries', title: 'Bandwidth — ${direction:text}', gridPos: { x: 0, y: 4, w: 16, h: 10 }, datasource: DS.zabbix, targets: bwTargets, transformations: [nice],
+    { id: IDS.bw, type: 'timeseries', title: 'Bandwidth — ${direction:text}', gridPos: { x: 0, y: 4, w: 14, h: 10 }, datasource: DS.zabbix, targets: bwTargets, transformations: [nice],
       description: 'One line per selected device and interface. Lines are never added together.',
       fieldConfig: { defaults: { unit: 'bps', min: 0, noValue: 'NO DATA for the selected devices / interfaces', custom: { drawStyle: 'line', lineWidth: 1.5, fillOpacity: 10, showPoints: 'never', axisBorderShow: false } },
         overrides: [byRegex('.*received.*|.*Bits received.*', [prop('color', { mode: 'fixed', fixedColor: COLORS.inbound })]), byRegex('.*sent.*', [prop('color', { mode: 'fixed', fixedColor: COLORS.outbound })])] },
       options: { legend: { displayMode: 'table', placement: 'bottom', showLegend: true, calcs: ['lastNotNull', 'mean', 'max'] }, tooltip: { mode: 'multi', sort: 'desc' } } },
-    { id: IDS.summary, type: 'table', title: 'Interface summary (capacity next to traffic)', gridPos: { x: 16, y: 4, w: 8, h: 10 }, datasource: DS.zabbix,
-      description: 'Mean / peak of each metric per interface for the time range, with the interface speed (capacity) as its own row. Utilisation = traffic compared with speed.',
+    { id: IDS.summary, type: 'table', title: 'Interface summary (capacity next to traffic)', gridPos: { x: 14, y: 4, w: 10, h: 10 }, datasource: DS.zabbix,
+      description: 'Mean / peak / last value of each metric per interface for the time range; the interface speed (capacity) is its own row, so traffic can be compared with it.',
       targets: [zq('A', IF('Bits (received|sent)')), zq('B', IF('Speed'))],
-      transformations: [{ id: 'reduce', options: { mode: 'seriesToRows', reducers: ['mean', 'max', 'lastNotNull'], labelsToFields: false } },
-        { id: 'renameByRegex', options: { regex: '^(.*): Interface (.*)\\((.*)\\): (.*)$', renamePattern: '$1 · $2 · $4' } }, { id: 'organize', options: { renameByName: { Field: 'Interface · metric', Mean: 'Mean', Max: 'Peak', 'Last *': 'Last' } } }],
+      transformations: [nice, { id: 'reduce', options: { mode: 'seriesToRows', reducers: ['mean', 'max', 'lastNotNull'], labelsToFields: false } }, { id: 'organize', options: { renameByName: { Field: 'Interface · metric', Mean: 'Mean', Max: 'Peak', 'Last *': 'Last' } } }],
       fieldConfig: { defaults: { unit: 'bps', decimals: 1, noValue: '—', custom: { align: 'left', cellOptions: { type: 'auto' } } }, overrides: [{ matcher: { id: 'byName', options: 'Interface · metric' }, properties: [prop('unit', 'string')] }] },
       options: { showHeader: true, cellHeight: 'sm' } },
     { id: IDS.explorer, type: 'timeseries', title: 'Selected metric — ${metric:text}', gridPos: { x: 0, y: 14, w: 24, h: 9 }, datasource: DS.zabbix,
@@ -83,7 +82,7 @@ function charts() {
       targets: [zq('A', IF('($metric)'))], transformations: [nice],
       fieldConfig: { defaults: { noValue: 'NO DATA — the selected metric is not monitored on these interfaces', custom: { drawStyle: 'line', lineWidth: 1.5, fillOpacity: 8, showPoints: 'never', axisBorderShow: false, spanNulls: false } },
         overrides: [
-          byRegex('.*Operational status.*', [prop('unit', 'none'), prop('custom.lineInterpolation', 'stepAfter'), prop('custom.axisPlacement', 'right'), prop('custom.axisLabel', 'Oper status (1 = up)'), prop('mappings', [{ type: 'value', options: { 1: colour(COLORS.up, 'UP', 0), 2: colour(COLORS.down, 'DOWN', 1) } }, { type: 'range', options: { from: 3, to: 7, result: colour(COLORS.unknown, 'OTHER', 2) } }])]),
+          byRegex('.*Operational status.*', [prop('unit', 'none'), prop('custom.lineInterpolation', 'stepAfter'), prop('custom.fillOpacity', 0), prop('custom.axisPlacement', 'right'), prop('custom.axisLabel', 'Oper status (1 = up)'), prop('mappings', [{ type: 'value', options: { 1: colour(COLORS.up, 'UP', 0), 2: colour(COLORS.down, 'DOWN', 1) } }, { type: 'range', options: { from: 3, to: 7, result: colour(COLORS.unknown, 'OTHER', 2) } }])]),
           byRegex('.*Bits.*', [prop('unit', 'bps')]), byRegex('.*(errors|discarded).*', [prop('unit', 'pps')])] },
       options: { legend: { displayMode: 'table', placement: 'bottom', showLegend: true, calcs: ['lastNotNull', 'max'] }, tooltip: { mode: 'multi', sort: 'desc' } } },
   ];

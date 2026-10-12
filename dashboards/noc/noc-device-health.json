@@ -981,7 +981,7 @@
     },
     {
       "id": 122,
-      "type": "state-timeline",
+      "type": "status-history",
       "title": "Availability timeline (ICMP)",
       "gridPos": {
         "x": 15,
@@ -993,7 +993,7 @@
         "type": "alexanderzobnin-zabbix-datasource",
         "uid": "zabbix-lab"
       },
-      "description": "ICMP reachability of each selected device over the selected time range. A gap means no data was collected (NOT the same as DOWN).",
+      "description": "ICMP reachability of each selected device over the selected time range. One cell per 10 minutes (DOWN if any ping in it failed). An empty stretch means nothing was collected (a stale or missing collection, NOT the same as DOWN).",
       "targets": [
         {
           "refId": "A",
@@ -1017,7 +1017,43 @@
           "item": {
             "filter": "/^ICMP ping$/"
           },
-          "functions": [],
+          "functions": [
+            {
+              "def": {
+                "name": "groupBy",
+                "category": "Transform",
+                "params": [
+                  {
+                    "name": "interval",
+                    "type": "string"
+                  },
+                  {
+                    "name": "function",
+                    "options": [
+                      "avg",
+                      "min",
+                      "max",
+                      "sum",
+                      "count",
+                      "median",
+                      "first",
+                      "last"
+                    ],
+                    "type": "string"
+                  }
+                ],
+                "defaultParams": [
+                  "1m",
+                  "avg"
+                ]
+              },
+              "params": [
+                "10m",
+                "min"
+              ],
+              "added": false
+            }
+          ],
           "options": {
             "showDisabledItems": false
           },
@@ -1033,17 +1069,26 @@
           },
           "mappings": [
             {
-              "type": "value",
+              "type": "range",
               "options": {
-                "0": {
-                  "color": "#C53030",
-                  "text": "DOWN",
-                  "index": 1
-                },
-                "1": {
+                "from": 0.5,
+                "to": 1,
+                "result": {
                   "color": "#2E8B57",
                   "text": "UP",
                   "index": 0
+                }
+              }
+            },
+            {
+              "type": "range",
+              "options": {
+                "from": 0,
+                "to": 0.4999,
+                "result": {
+                  "color": "#C53030",
+                  "text": "DOWN",
+                  "index": 1
                 }
               }
             }
@@ -1052,23 +1097,27 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "#5B7A99",
+                "color": "#C53030",
                 "value": null
+              },
+              {
+                "color": "#2E8B57",
+                "value": 0.5
               }
             ]
           },
           "custom": {
-            "fillOpacity": 85,
+            "fillOpacity": 90,
             "lineWidth": 0
           }
         },
         "overrides": []
       },
       "options": {
-        "mergeValues": true,
         "showValue": "never",
-        "alignValue": "center",
         "rowHeight": 0.8,
+        "colWidth": 1,
+        "cellGap": 0,
         "legend": {
           "showLegend": false
         },
@@ -1570,7 +1619,7 @@
           "custom": {
             "drawStyle": "line",
             "lineWidth": 1.5,
-            "fillOpacity": 8,
+            "fillOpacity": 0,
             "showPoints": "never",
             "spanNulls": false,
             "axisBorderShow": false
@@ -5098,617 +5147,618 @@
       "id": 125,
       "type": "row",
       "title": "Data behind the status table (do not edit)",
-      "collapsed": false,
+      "collapsed": true,
       "gridPos": {
         "x": 0,
         "y": 31,
         "w": 24,
         "h": 1
       },
-      "panels": []
-    },
-    {
-      "type": "table",
-      "transparent": false,
-      "options": {
-        "showHeader": true,
-        "cellHeight": "sm"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "cellOptions": {
-              "type": "auto"
-            }
-          }
-        },
-        "overrides": []
-      },
-      "id": 130,
-      "title": "Devices in the selected scope",
-      "description": "The device list is built from the selectors above (Zabbix inventory), so a device with no data at all still appears in the status table.",
-      "gridPos": {
-        "x": 0,
-        "y": 32,
-        "w": 6,
-        "h": 9
-      },
-      "datasource": {
-        "type": "grafana-testdata-datasource",
-        "uid": "noc-inventory"
-      },
-      "targets": [
+      "panels": [
         {
-          "refId": "I",
+          "type": "table",
+          "transparent": false,
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "cellOptions": {
+                  "type": "auto"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "id": 130,
+          "title": "Devices in the selected scope",
+          "description": "The device list is built from the selectors above (Zabbix inventory), so a device with no data at all still appears in the status table.",
+          "gridPos": {
+            "x": 0,
+            "y": 32,
+            "w": 6,
+            "h": 9
+          },
           "datasource": {
             "type": "grafana-testdata-datasource",
             "uid": "noc-inventory"
           },
-          "scenarioId": "csv_content",
-          "csvContent": "_,${device:csv}\n_,${device:csv}"
-        }
-      ],
-      "transformations": [
-        {
-          "id": "transpose",
-          "options": {}
+          "targets": [
+            {
+              "refId": "I",
+              "datasource": {
+                "type": "grafana-testdata-datasource",
+                "uid": "noc-inventory"
+              },
+              "scenarioId": "csv_content",
+              "csvContent": "_,${device:csv}\n_,${device:csv}"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "transpose",
+              "options": {}
+            },
+            {
+              "id": "filterByValue",
+              "options": {
+                "type": "exclude",
+                "match": "any",
+                "filters": [
+                  {
+                    "fieldName": "Field",
+                    "config": {
+                      "id": "equal",
+                      "options": {
+                        "value": "_"
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "id": "organize",
+              "options": {
+                "renameByName": {
+                  "Field": "host"
+                },
+                "includeByName": {
+                  "Field": true
+                }
+              }
+            }
+          ]
         },
         {
-          "id": "filterByValue",
+          "type": "table",
+          "transparent": false,
           "options": {
-            "type": "exclude",
-            "match": "any",
-            "filters": [
-              {
-                "fieldName": "Field",
-                "config": {
-                  "id": "equal",
-                  "options": {
-                    "value": "_"
+            "showHeader": true,
+            "cellHeight": "sm"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "cellOptions": {
+                  "type": "auto"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "id": 131,
+          "title": "Latest values (last 10m)",
+          "description": "PING 200=UP 100=DOWN, SNMP 2=OK 1=UNKNOWN 3=DOWN (encoded for the state logic). A device without a sample in the last 10 minutes has no row here.",
+          "gridPos": {
+            "x": 6,
+            "y": 32,
+            "w": 10,
+            "h": 9
+          },
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+          },
+          "timeFrom": "10m",
+          "hideTimeOverride": false,
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "alexanderzobnin-zabbix-datasource",
+                "uid": "zabbix-lab"
+              },
+              "queryType": "0",
+              "group": {
+                "filter": "/.*/"
+              },
+              "host": {
+                "filter": "$device"
+              },
+              "application": {
+                "filter": ""
+              },
+              "itemTag": {
+                "filter": ""
+              },
+              "item": {
+                "filter": "/^ICMP ping$/"
+              },
+              "functions": [
+                {
+                  "def": {
+                    "name": "offset",
+                    "category": "Transform",
+                    "params": [
+                      {
+                        "name": "value",
+                        "type": "float"
+                      }
+                    ],
+                    "defaultParams": []
+                  },
+                  "params": [
+                    1
+                  ],
+                  "added": false
+                },
+                {
+                  "def": {
+                    "name": "scale",
+                    "category": "Transform",
+                    "params": [
+                      {
+                        "name": "value",
+                        "type": "float"
+                      }
+                    ],
+                    "defaultParams": []
+                  },
+                  "params": [
+                    100
+                  ],
+                  "added": false
+                },
+                {
+                  "def": {
+                    "name": "setAlias",
+                    "category": "Alias",
+                    "params": [
+                      {
+                        "name": "value",
+                        "type": "string"
+                      }
+                    ],
+                    "defaultParams": []
+                  },
+                  "params": [
+                    "PING"
+                  ],
+                  "added": false
+                }
+              ],
+              "options": {
+                "showDisabledItems": false
+              },
+              "resultFormat": "time_series"
+            },
+            {
+              "refId": "B",
+              "datasource": {
+                "type": "alexanderzobnin-zabbix-datasource",
+                "uid": "zabbix-lab"
+              },
+              "queryType": "0",
+              "group": {
+                "filter": "/.*/"
+              },
+              "host": {
+                "filter": "$device"
+              },
+              "application": {
+                "filter": ""
+              },
+              "itemTag": {
+                "filter": ""
+              },
+              "item": {
+                "filter": "/^SNMP agent availability$/"
+              },
+              "functions": [
+                {
+                  "def": {
+                    "name": "offset",
+                    "category": "Transform",
+                    "params": [
+                      {
+                        "name": "value",
+                        "type": "float"
+                      }
+                    ],
+                    "defaultParams": []
+                  },
+                  "params": [
+                    1
+                  ],
+                  "added": false
+                },
+                {
+                  "def": {
+                    "name": "setAlias",
+                    "category": "Alias",
+                    "params": [
+                      {
+                        "name": "value",
+                        "type": "string"
+                      }
+                    ],
+                    "defaultParams": []
+                  },
+                  "params": [
+                    "SNMP"
+                  ],
+                  "added": false
+                }
+              ],
+              "options": {
+                "showDisabledItems": false
+              },
+              "resultFormat": "time_series"
+            },
+            {
+              "refId": "C",
+              "datasource": {
+                "type": "alexanderzobnin-zabbix-datasource",
+                "uid": "zabbix-lab"
+              },
+              "queryType": "0",
+              "group": {
+                "filter": "/.*/"
+              },
+              "host": {
+                "filter": "$device"
+              },
+              "application": {
+                "filter": ""
+              },
+              "itemTag": {
+                "filter": ""
+              },
+              "item": {
+                "filter": "/CPU utilization/"
+              },
+              "functions": [
+                {
+                  "def": {
+                    "name": "setAlias",
+                    "category": "Alias",
+                    "params": [
+                      {
+                        "name": "value",
+                        "type": "string"
+                      }
+                    ],
+                    "defaultParams": []
+                  },
+                  "params": [
+                    "CPU"
+                  ],
+                  "added": false
+                }
+              ],
+              "options": {
+                "showDisabledItems": false
+              },
+              "resultFormat": "time_series"
+            },
+            {
+              "refId": "D",
+              "datasource": {
+                "type": "alexanderzobnin-zabbix-datasource",
+                "uid": "zabbix-lab"
+              },
+              "queryType": "0",
+              "group": {
+                "filter": "/.*/"
+              },
+              "host": {
+                "filter": "$device"
+              },
+              "application": {
+                "filter": ""
+              },
+              "itemTag": {
+                "filter": ""
+              },
+              "item": {
+                "filter": "/Memory utilization/"
+              },
+              "functions": [
+                {
+                  "def": {
+                    "name": "setAlias",
+                    "category": "Alias",
+                    "params": [
+                      {
+                        "name": "value",
+                        "type": "string"
+                      }
+                    ],
+                    "defaultParams": []
+                  },
+                  "params": [
+                    "MEM"
+                  ],
+                  "added": false
+                }
+              ],
+              "options": {
+                "showDisabledItems": false
+              },
+              "resultFormat": "time_series"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "reduce",
+              "options": {
+                "mode": "seriesToRows",
+                "reducers": [
+                  "lastNotNull"
+                ],
+                "labelsToFields": true
+              }
+            },
+            {
+              "id": "groupingToMatrix",
+              "options": {
+                "columnField": "Field",
+                "rowField": "host",
+                "valueField": "Last *",
+                "emptyValue": "null"
+              }
+            },
+            {
+              "id": "renameByRegex",
+              "options": {
+                "regex": "^host.Field$",
+                "renamePattern": "host"
+              }
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "transparent": false,
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "cellOptions": {
+                  "type": "auto"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "id": 132,
+          "title": "Availability data seen (last 8d)",
+          "description": "1000 = at least one availability sample (ICMP or SNMP) exists in the last 8 days. Separates NO DATA (stale) from NOT MONITORED (never collected / disabled).",
+          "gridPos": {
+            "x": 16,
+            "y": 32,
+            "w": 8,
+            "h": 9
+          },
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+          },
+          "timeFrom": "8d",
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "alexanderzobnin-zabbix-datasource",
+                "uid": "zabbix-lab"
+              },
+              "queryType": "0",
+              "group": {
+                "filter": "/.*/"
+              },
+              "host": {
+                "filter": "$device"
+              },
+              "application": {
+                "filter": ""
+              },
+              "itemTag": {
+                "filter": ""
+              },
+              "item": {
+                "filter": "/^ICMP ping$/"
+              },
+              "functions": [
+                {
+                  "def": {
+                    "name": "scale",
+                    "category": "Transform",
+                    "params": [
+                      {
+                        "name": "value",
+                        "type": "float"
+                      }
+                    ],
+                    "defaultParams": []
+                  },
+                  "params": [
+                    0
+                  ],
+                  "added": false
+                },
+                {
+                  "def": {
+                    "name": "offset",
+                    "category": "Transform",
+                    "params": [
+                      {
+                        "name": "value",
+                        "type": "float"
+                      }
+                    ],
+                    "defaultParams": []
+                  },
+                  "params": [
+                    1000
+                  ],
+                  "added": false
+                },
+                {
+                  "def": {
+                    "name": "setAlias",
+                    "category": "Alias",
+                    "params": [
+                      {
+                        "name": "value",
+                        "type": "string"
+                      }
+                    ],
+                    "defaultParams": []
+                  },
+                  "params": [
+                    "SEEN"
+                  ],
+                  "added": false
+                }
+              ],
+              "options": {
+                "showDisabledItems": false
+              },
+              "resultFormat": "time_series"
+            },
+            {
+              "refId": "B",
+              "datasource": {
+                "type": "alexanderzobnin-zabbix-datasource",
+                "uid": "zabbix-lab"
+              },
+              "queryType": "0",
+              "group": {
+                "filter": "/.*/"
+              },
+              "host": {
+                "filter": "$device"
+              },
+              "application": {
+                "filter": ""
+              },
+              "itemTag": {
+                "filter": ""
+              },
+              "item": {
+                "filter": "/^SNMP agent availability$/"
+              },
+              "functions": [
+                {
+                  "def": {
+                    "name": "scale",
+                    "category": "Transform",
+                    "params": [
+                      {
+                        "name": "value",
+                        "type": "float"
+                      }
+                    ],
+                    "defaultParams": []
+                  },
+                  "params": [
+                    0
+                  ],
+                  "added": false
+                },
+                {
+                  "def": {
+                    "name": "offset",
+                    "category": "Transform",
+                    "params": [
+                      {
+                        "name": "value",
+                        "type": "float"
+                      }
+                    ],
+                    "defaultParams": []
+                  },
+                  "params": [
+                    1000
+                  ],
+                  "added": false
+                },
+                {
+                  "def": {
+                    "name": "setAlias",
+                    "category": "Alias",
+                    "params": [
+                      {
+                        "name": "value",
+                        "type": "string"
+                      }
+                    ],
+                    "defaultParams": []
+                  },
+                  "params": [
+                    "SEEN"
+                  ],
+                  "added": false
+                }
+              ],
+              "options": {
+                "showDisabledItems": false
+              },
+              "resultFormat": "time_series"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "reduce",
+              "options": {
+                "mode": "seriesToRows",
+                "reducers": [
+                  "lastNotNull"
+                ],
+                "labelsToFields": true
+              }
+            },
+            {
+              "id": "groupBy",
+              "options": {
+                "fields": {
+                  "host": {
+                    "operation": "groupby"
+                  },
+                  "Last *": {
+                    "operation": "aggregate",
+                    "aggregations": [
+                      "max"
+                    ]
                   }
                 }
               }
-            ]
-          }
-        },
-        {
-          "id": "organize",
-          "options": {
-            "renameByName": {
-              "Field": "host"
-            },
-            "includeByName": {
-              "Field": true
-            }
-          }
-        }
-      ]
-    },
-    {
-      "type": "table",
-      "transparent": false,
-      "options": {
-        "showHeader": true,
-        "cellHeight": "sm"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "cellOptions": {
-              "type": "auto"
-            }
-          }
-        },
-        "overrides": []
-      },
-      "id": 131,
-      "title": "Latest values (last 10m)",
-      "description": "PING 200=UP 100=DOWN, SNMP 2=OK 1=UNKNOWN 3=DOWN (encoded for the state logic). A device without a sample in the last 10 minutes has no row here.",
-      "gridPos": {
-        "x": 6,
-        "y": 32,
-        "w": 10,
-        "h": 9
-      },
-      "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
-      },
-      "timeFrom": "10m",
-      "hideTimeOverride": false,
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "alexanderzobnin-zabbix-datasource",
-            "uid": "zabbix-lab"
-          },
-          "queryType": "0",
-          "group": {
-            "filter": "/.*/"
-          },
-          "host": {
-            "filter": "$device"
-          },
-          "application": {
-            "filter": ""
-          },
-          "itemTag": {
-            "filter": ""
-          },
-          "item": {
-            "filter": "/^ICMP ping$/"
-          },
-          "functions": [
-            {
-              "def": {
-                "name": "offset",
-                "category": "Transform",
-                "params": [
-                  {
-                    "name": "value",
-                    "type": "float"
-                  }
-                ],
-                "defaultParams": []
-              },
-              "params": [
-                1
-              ],
-              "added": false
             },
             {
-              "def": {
-                "name": "scale",
-                "category": "Transform",
-                "params": [
-                  {
-                    "name": "value",
-                    "type": "float"
-                  }
-                ],
-                "defaultParams": []
-              },
-              "params": [
-                100
-              ],
-              "added": false
-            },
-            {
-              "def": {
-                "name": "setAlias",
-                "category": "Alias",
-                "params": [
-                  {
-                    "name": "value",
-                    "type": "string"
-                  }
-                ],
-                "defaultParams": []
-              },
-              "params": [
-                "PING"
-              ],
-              "added": false
-            }
-          ],
-          "options": {
-            "showDisabledItems": false
-          },
-          "resultFormat": "time_series"
-        },
-        {
-          "refId": "B",
-          "datasource": {
-            "type": "alexanderzobnin-zabbix-datasource",
-            "uid": "zabbix-lab"
-          },
-          "queryType": "0",
-          "group": {
-            "filter": "/.*/"
-          },
-          "host": {
-            "filter": "$device"
-          },
-          "application": {
-            "filter": ""
-          },
-          "itemTag": {
-            "filter": ""
-          },
-          "item": {
-            "filter": "/^SNMP agent availability$/"
-          },
-          "functions": [
-            {
-              "def": {
-                "name": "offset",
-                "category": "Transform",
-                "params": [
-                  {
-                    "name": "value",
-                    "type": "float"
-                  }
-                ],
-                "defaultParams": []
-              },
-              "params": [
-                1
-              ],
-              "added": false
-            },
-            {
-              "def": {
-                "name": "setAlias",
-                "category": "Alias",
-                "params": [
-                  {
-                    "name": "value",
-                    "type": "string"
-                  }
-                ],
-                "defaultParams": []
-              },
-              "params": [
-                "SNMP"
-              ],
-              "added": false
-            }
-          ],
-          "options": {
-            "showDisabledItems": false
-          },
-          "resultFormat": "time_series"
-        },
-        {
-          "refId": "C",
-          "datasource": {
-            "type": "alexanderzobnin-zabbix-datasource",
-            "uid": "zabbix-lab"
-          },
-          "queryType": "0",
-          "group": {
-            "filter": "/.*/"
-          },
-          "host": {
-            "filter": "$device"
-          },
-          "application": {
-            "filter": ""
-          },
-          "itemTag": {
-            "filter": ""
-          },
-          "item": {
-            "filter": "/CPU utilization/"
-          },
-          "functions": [
-            {
-              "def": {
-                "name": "setAlias",
-                "category": "Alias",
-                "params": [
-                  {
-                    "name": "value",
-                    "type": "string"
-                  }
-                ],
-                "defaultParams": []
-              },
-              "params": [
-                "CPU"
-              ],
-              "added": false
-            }
-          ],
-          "options": {
-            "showDisabledItems": false
-          },
-          "resultFormat": "time_series"
-        },
-        {
-          "refId": "D",
-          "datasource": {
-            "type": "alexanderzobnin-zabbix-datasource",
-            "uid": "zabbix-lab"
-          },
-          "queryType": "0",
-          "group": {
-            "filter": "/.*/"
-          },
-          "host": {
-            "filter": "$device"
-          },
-          "application": {
-            "filter": ""
-          },
-          "itemTag": {
-            "filter": ""
-          },
-          "item": {
-            "filter": "/Memory utilization/"
-          },
-          "functions": [
-            {
-              "def": {
-                "name": "setAlias",
-                "category": "Alias",
-                "params": [
-                  {
-                    "name": "value",
-                    "type": "string"
-                  }
-                ],
-                "defaultParams": []
-              },
-              "params": [
-                "MEM"
-              ],
-              "added": false
-            }
-          ],
-          "options": {
-            "showDisabledItems": false
-          },
-          "resultFormat": "time_series"
-        }
-      ],
-      "transformations": [
-        {
-          "id": "reduce",
-          "options": {
-            "mode": "seriesToRows",
-            "reducers": [
-              "lastNotNull"
-            ],
-            "labelsToFields": true
-          }
-        },
-        {
-          "id": "groupingToMatrix",
-          "options": {
-            "columnField": "Field",
-            "rowField": "host",
-            "valueField": "Last *",
-            "emptyValue": "null"
-          }
-        },
-        {
-          "id": "renameByRegex",
-          "options": {
-            "regex": "^host.Field$",
-            "renamePattern": "host"
-          }
-        }
-      ]
-    },
-    {
-      "type": "table",
-      "transparent": false,
-      "options": {
-        "showHeader": true,
-        "cellHeight": "sm"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "cellOptions": {
-              "type": "auto"
-            }
-          }
-        },
-        "overrides": []
-      },
-      "id": 132,
-      "title": "Availability data seen (last 8d)",
-      "description": "1000 = at least one availability sample (ICMP or SNMP) exists in the last 8 days. Separates NO DATA (stale) from NOT MONITORED (never collected / disabled).",
-      "gridPos": {
-        "x": 16,
-        "y": 32,
-        "w": 8,
-        "h": 9
-      },
-      "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
-      },
-      "timeFrom": "8d",
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "alexanderzobnin-zabbix-datasource",
-            "uid": "zabbix-lab"
-          },
-          "queryType": "0",
-          "group": {
-            "filter": "/.*/"
-          },
-          "host": {
-            "filter": "$device"
-          },
-          "application": {
-            "filter": ""
-          },
-          "itemTag": {
-            "filter": ""
-          },
-          "item": {
-            "filter": "/^ICMP ping$/"
-          },
-          "functions": [
-            {
-              "def": {
-                "name": "scale",
-                "category": "Transform",
-                "params": [
-                  {
-                    "name": "value",
-                    "type": "float"
-                  }
-                ],
-                "defaultParams": []
-              },
-              "params": [
-                0
-              ],
-              "added": false
-            },
-            {
-              "def": {
-                "name": "offset",
-                "category": "Transform",
-                "params": [
-                  {
-                    "name": "value",
-                    "type": "float"
-                  }
-                ],
-                "defaultParams": []
-              },
-              "params": [
-                1000
-              ],
-              "added": false
-            },
-            {
-              "def": {
-                "name": "setAlias",
-                "category": "Alias",
-                "params": [
-                  {
-                    "name": "value",
-                    "type": "string"
-                  }
-                ],
-                "defaultParams": []
-              },
-              "params": [
-                "SEEN"
-              ],
-              "added": false
-            }
-          ],
-          "options": {
-            "showDisabledItems": false
-          },
-          "resultFormat": "time_series"
-        },
-        {
-          "refId": "B",
-          "datasource": {
-            "type": "alexanderzobnin-zabbix-datasource",
-            "uid": "zabbix-lab"
-          },
-          "queryType": "0",
-          "group": {
-            "filter": "/.*/"
-          },
-          "host": {
-            "filter": "$device"
-          },
-          "application": {
-            "filter": ""
-          },
-          "itemTag": {
-            "filter": ""
-          },
-          "item": {
-            "filter": "/^SNMP agent availability$/"
-          },
-          "functions": [
-            {
-              "def": {
-                "name": "scale",
-                "category": "Transform",
-                "params": [
-                  {
-                    "name": "value",
-                    "type": "float"
-                  }
-                ],
-                "defaultParams": []
-              },
-              "params": [
-                0
-              ],
-              "added": false
-            },
-            {
-              "def": {
-                "name": "offset",
-                "category": "Transform",
-                "params": [
-                  {
-                    "name": "value",
-                    "type": "float"
-                  }
-                ],
-                "defaultParams": []
-              },
-              "params": [
-                1000
-              ],
-              "added": false
-            },
-            {
-              "def": {
-                "name": "setAlias",
-                "category": "Alias",
-                "params": [
-                  {
-                    "name": "value",
-                    "type": "string"
-                  }
-                ],
-                "defaultParams": []
-              },
-              "params": [
-                "SEEN"
-              ],
-              "added": false
-            }
-          ],
-          "options": {
-            "showDisabledItems": false
-          },
-          "resultFormat": "time_series"
-        }
-      ],
-      "transformations": [
-        {
-          "id": "reduce",
-          "options": {
-            "mode": "seriesToRows",
-            "reducers": [
-              "lastNotNull"
-            ],
-            "labelsToFields": true
-          }
-        },
-        {
-          "id": "groupBy",
-          "options": {
-            "fields": {
-              "host": {
-                "operation": "groupby"
-              },
-              "Last *": {
-                "operation": "aggregate",
-                "aggregations": [
-                  "max"
-                ]
+              "id": "organize",
+              "options": {
+                "renameByName": {
+                  "Last * (max)": "SEEN"
+                }
               }
             }
-          }
-        },
-        {
-          "id": "organize",
-          "options": {
-            "renameByName": {
-              "Last * (max)": "SEEN"
-            }
-          }
+          ]
         }
       ]
     }
@@ -5839,12 +5889,10 @@
         "includeAll": false,
         "current": {
           "text": [
-            "CPU",
-            "Memory"
+            "CPU"
           ],
           "value": [
-            "CPU utilization",
-            "Memory utilization"
+            "CPU utilization"
           ]
         },
         "options": [

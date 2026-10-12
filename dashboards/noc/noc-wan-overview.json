@@ -648,7 +648,7 @@
       "gridPos": {
         "x": 0,
         "y": 4,
-        "w": 16,
+        "w": 14,
         "h": 10
       },
       "datasource": {
@@ -763,16 +763,16 @@
       "type": "table",
       "title": "Interface summary (capacity next to traffic)",
       "gridPos": {
-        "x": 16,
+        "x": 14,
         "y": 4,
-        "w": 8,
+        "w": 10,
         "h": 10
       },
       "datasource": {
         "type": "alexanderzobnin-zabbix-datasource",
         "uid": "zabbix-lab"
       },
-      "description": "Mean / peak of each metric per interface for the time range, with the interface speed (capacity) as its own row. Utilisation = traffic compared with speed.",
+      "description": "Mean / peak / last value of each metric per interface for the time range; the interface speed (capacity) is its own row, so traffic can be compared with it.",
       "targets": [
         {
           "refId": "A",
@@ -833,6 +833,13 @@
       ],
       "transformations": [
         {
+          "id": "renameByRegex",
+          "options": {
+            "regex": "^(.*): Interface (.*)\\((.*)\\): (.*)$",
+            "renamePattern": "$1 · $2 · $4"
+          }
+        },
+        {
           "id": "reduce",
           "options": {
             "mode": "seriesToRows",
@@ -842,13 +849,6 @@
               "lastNotNull"
             ],
             "labelsToFields": false
-          }
-        },
-        {
-          "id": "renameByRegex",
-          "options": {
-            "regex": "^(.*): Interface (.*)\\((.*)\\): (.*)$",
-            "renamePattern": "$1 · $2 · $4"
           }
         },
         {
@@ -975,6 +975,10 @@
               {
                 "id": "custom.lineInterpolation",
                 "value": "stepAfter"
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
               },
               {
                 "id": "custom.axisPlacement",
