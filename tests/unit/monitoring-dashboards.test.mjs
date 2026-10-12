@@ -48,3 +48,20 @@ test('device health: all five states are distinct in the mapping and a reachable
   assert.equal(vals[1002].text, 'UP');       // SNMP-only device
   assert.equal(map.find((m) => m.type === 'range' && m.options.from === 1200).options.result.text, 'UP');   // ping up, any SNMP/CPU/Memory
 });
+
+test('wan: original uid and six link panels preserved; standard variables; series are never summed', async () => {
+  const { buildWan } = await import('../../tools/monitoring/wan.mjs');
+  const base = rd('tools/monitoring/base/noc-wan-overview.json');
+  const d = rd('dashboards/noc/noc-wan-overview.json');
+  assert.equal(d.uid, base.uid);
+  const legacy = d.panels.find((p) => p.type === 'row' && p.collapsed).panels;
+  assert.deepEqual(legacy.map((p) => p.id), base.panels.map((p) => p.id));
+  base.panels.forEach((p, i) => assert.deepEqual(legacy[i].targets, p.targets));
+  const names = d.templating.list.map((v) => v.name);
+  for (const n of ['site', 'device_group', 'device', 'interface', 'direction', 'metric']) assert.ok(names.includes(n), n);
+  const norm = (x) => JSON.stringify({ ...x, id: null, version: null });
+  assert.equal(norm(d), norm(buildWan(base)));
+  const text = JSON.stringify(flat(d).filter((p) => p.id >= 200));
+  assert.ok(!/sumSeries|"sum"[^]*Bits/.test(text.replace(/reducers":\["sum"\]/g, '')), 'bandwidth must not be summed across interfaces');
+  assert.ok(!/itemids|SITE-A|STC|MOBILY/.test(text), 'new section carries no item ids or device names');
+});
