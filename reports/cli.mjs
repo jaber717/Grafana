@@ -19,7 +19,7 @@ import { readFileSync, writeFileSync, existsSync, readdirSync, mkdirSync, copyFi
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { spawnSync } from 'node:child_process';
+import { spawnSync, spawn } from 'node:child_process';
 import { loadSettings, validateSettings, parseEnv } from './lib/settings.mjs';
 import { runDaily, makeLogger, DASH_UID, slimModel, deliverResults } from './lib/generate.mjs';
 import { Grafana } from './lib/grafana-client.mjs';
@@ -201,14 +201,24 @@ async function main() {
       const env = asUser ? ['env', 'HOME=/var/lib/grafana-report/home', 'XDG_RUNTIME_DIR=/run/grafana-report'] : [];
       const pre = asUser ? ['sudo', '-u', asUser, ...env] : [];
       const sh = (args, input) => spawnSync(args[0], args.slice(1), { input, encoding: 'utf8', maxBuffer: 1 << 30, cwd: '/' });
-      const unz = spawnSync('gunzip', ['-c', file], { maxBuffer: 3 << 30 });
-      if (unz.status !== 0) fail(`cannot read ${file}: ${unz.stderr}`);
-      const load = spawnSync(pre[0] || 'podman', [...pre.slice(1), ...(pre.length ? ['podman'] : []), 'load'], { input: unz.stdout, encoding: 'utf8', maxBuffer: 1 << 26, cwd: '/' });
+      // stream gunzip -> podman load (the image is >1 GB uncompressed: never buffer it)
+      const loadArgv = [...pre, 'podman', 'load'];
+      const load = await new Promise((resolve) => {
+        const gz = spawn('gunzip', ['-c', file], { stdio: ['ignore', 'pipe', 'pipe'] });
+        const pm = spawn(loadArgv[0], loadArgv.slice(1), { cwd: '/', stdio: ['pipe', 'pipe', 'pipe'] });
+        let out = '', err = '', gzErr = '';
+        gz.stderr.on('data', (d) => (gzErr += d));
+        gz.stdout.pipe(pm.stdin);
+        pm.stdout.on('data', (d) => (out += d));
+        pm.stderr.on('data', (d) => (err += d));
+        gz.on('close', (code) => { if (code !== 0) { pm.kill(); resolve({ status: code, stdout: '', stderr: `gunzip: ${gzErr}` }); } });
+        pm.on('close', (code) => resolve({ status: code, stdout: out, stderr: err }));
+      });
       if (load.status !== 0) fail(`podman load failed: ${load.stderr}`);
       const id = (`${load.stdout}\n${load.stderr}`.match(/sha256:([0-9a-f]{64})/) || [])[1];
       if (!id) fail('could not read the loaded image ID from podman');
       if (want && id !== want.replace(/^sha256:/, '')) fail(`loaded image ID ${id} is not the expected ${want}: refusing to tag it`);
-      const tag = sh([...pre, ...(pre.length ? [] : []), 'podman', 'tag', id, 'localhost/grafana-image-renderer:pinned']);
+      const tag = sh([...pre, 'podman', 'tag', id, 'localhost/grafana-image-renderer:pinned']);
       if (tag.status !== 0) fail(`podman tag failed: ${tag.stderr}`);
       console.log(`loaded and verified image ${id}\ntagged localhost/grafana-image-renderer:pinned${asUser ? ` for ${asUser}` : ''}\nUse it in CHROMIUM_CMD / RENDERER_IMAGE on this host instead of the registry reference.`);
       return 0;
