@@ -61,7 +61,7 @@ test('wan: original uid and six link panels preserved; standard variables; serie
   for (const n of ['site', 'device_group', 'device', 'interface', 'direction', 'metric']) assert.ok(names.includes(n), n);
   const norm = (x) => JSON.stringify({ ...x, id: null, version: null });
   assert.equal(norm(d), norm(buildWan(base)));
-  const text = JSON.stringify(flat(d).filter((p) => p.id >= 200));
+  const text = JSON.stringify(d.panels.filter((p) => p.type !== 'row'));
   assert.ok(!/sumSeries|"sum"[^]*Bits/.test(text.replace(/reducers":\["sum"\]/g, '')), 'bandwidth must not be summed across interfaces');
   assert.ok(!/itemids|SITE-A|STC|MOBILY/.test(text), 'new section carries no item ids or device names');
 });
