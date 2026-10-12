@@ -1,11 +1,14 @@
 // Network Health report model (Report C). Same device-state semantics as the NOC "Device Health" dashboard, evaluated at the END of the
 // reporting window, plus the day's availability and CPU / memory:
 //
-//   code = SEEN(1000 if any availability sample exists in the 8 days up to the window end) + PING(200 up / 100 down, last 10 min)
-//          + SNMP(1 unknown / 2 available / 3 unavailable, last 10 min)
-//   UP            ping up, or (no fresh ping) SNMP available            DOWN   ping down, or (no fresh ping) SNMP unavailable
-//   UNKNOWN       no fresh ping, SNMP availability unknown               NO DATA  monitored but nothing in the last 10 minutes
+//   code = SEEN(1000 if any availability sample exists in the 8 days up to the window end) + ICMP(200 up / 100 down, last 10 min)
+//          + AGENT(20 up / 10 down) + SNMP(1 unknown / 2 available / 3 unavailable)
+//   Three DIFFERENT sources, decided in this order: ICMP reachability, SNMP availability, Zabbix agent availability.
+//   UP            ICMP up, else SNMP available, else agent answering      DOWN   ICMP down, else SNMP unavailable, else agent failing
+//   UNKNOWN       nothing decisive, SNMP availability unknown             NO DATA  monitored but nothing in the last 10 minutes
 //   NOT MONITORED no availability sample at all in 8 days
+// The agent only proves that the Zabbix agent on the host answers: it says nothing about interfaces or services, so an agent-only device has no
+// availability percentage and the report names the basis (ICMP / SNMP / Agent) of every state.
 // A device that is reachable but has no CPU / memory data stays UP: those columns say "not monitored". Reachability comes from monitoring
 // data only, never from NetFlow. Pure function: the same builder produces the operational and the DEMO report.
 import { BUCKET_S, classify, expectedBuckets, MIN_COVERAGE } from './coverage.mjs';
@@ -16,18 +19,31 @@ export const STATE_LABEL = { UP: 'UP', DOWN: 'DOWN', UNKNOWN: 'UNKNOWN', NO_DATA
 const ATTENTION_RANK = { DOWN: 0, UNKNOWN: 1, NO_DATA: 2, NOT_MONITORED: 3, UP: 4 };
 const SNMP_ENC ={ 0: 1, 1: 2, 2: 3 };                  // Zabbix: 0 unknown, 1 available, 2 unavailable
 
-export function stateCode({ ping = null, snmp = null, seen = false }) {
-  return (seen ? 1000 : 0) + (ping == null ? 0 : ping >= 0.5 ? 200 : 100) + (snmp == null ? 0 : SNMP_ENC[Math.round(snmp)] ?? 0);
+export function stateCode({ ping = null, snmp = null, agent = null, seen = false }) {
+  return (seen ? 1000 : 0) + (ping == null ? 0 : ping >= 0.5 ? 200 : 100) + (agent == null ? 0 : agent >= 0.5 ? 20 : 10) + (snmp == null ? 0 : SNMP_ENC[Math.round(snmp)] ?? 0);
 }
 export function stateOf(code) {
+  if (code === 0) return 'NOT_MONITORED';
   if (code >= 1200) return 'UP';
   if (code >= 1100) return 'DOWN';
-  if (code === 1002) return 'UP';
-  if (code === 1003) return 'DOWN';
-  if (code === 1001) return 'UNKNOWN';
-  if (code === 1000) return 'NO_DATA';
-  return 'NOT_MONITORED';
+  const s = (code - 1000) % 10, t = code - 1000 - s;
+  if (s === 2) return 'UP';
+  if (s === 3) return 'DOWN';
+  if (t === 20) return 'UP';
+  if (t === 10) return 'DOWN';
+  if (s === 1) return 'UNKNOWN';
+  return 'NO_DATA';
 }
+// which source decided the state: ICMP, SNMP, Agent (or null when nothing is decisive)
+export function basisOf(code) {
+  if (code >= 1100) return 'ICMP';
+  const s = (code - 1000) % 10, t = code - 1000 - s;
+  if (s === 2 || s === 3) return 'SNMP';
+  if (t === 20 || t === 10) return 'Agent';
+  return s === 1 ? 'SNMP' : null;
+}
+// every code the encoding can produce below the ICMP range, for building dashboard value mappings and filters
+export const NO_ICMP_CODES = [0, 10, 20].flatMap((t) => [0, 1, 2, 3].map((s) => 1000 + t + s));
 
 const mean = (a) => (a.length ? a.reduce((s, x) => s + x, 0) / a.length : null);
 const snap = (samples, win) => samples.map((s) => ({ t: win.startMs + Math.round((s.t - win.startMs) / (BUCKET_S * 1000)) * BUCKET_S * 1000, v: s.v })).filter((s) => s.v != null && s.t >= win.startMs && s.t < win.endMs);
@@ -49,9 +65,10 @@ function summarizeDevice(d, data, win, scope) {
   const { series, fresh, seen } = data;
   const ping = snap(series.ping?.[d.host] || [], win);
   const snmp = snap(series.snmp?.[d.host] || [], win);
-  const hasAvail = ping.length + snmp.length > 0;
+  const agent = snap(series.agent?.[d.host] || [], win);
+  const hasAvail = ping.length + snmp.length + agent.length > 0;
   const f = fresh[d.host] || {};
-  const code = stateCode({ ping: f.ping ?? null, snmp: f.snmp ?? null, seen: seen.has(d.host) || hasAvail });
+  const code = stateCode({ ping: f.ping ?? null, snmp: f.snmp ?? null, agent: f.agent ?? null, seen: seen.has(d.host) || hasAvail });
   const state = stateOf(code);
   // availability = share of ICMP samples that were up. A device without an ICMP item falls back to SNMP availability (1 = up, 2 = down);
   // SNMP "unknown" (0) carries no information, so those intervals are left out instead of being counted as down.
@@ -63,11 +80,11 @@ function summarizeDevice(d, data, win, scope) {
   for (let k = 0; k < n; k++) downFlags.push(grid.get(win.startMs + k * BUCKET_S * 1000) === false);
   const downMinutes = downFlags.filter(Boolean).length * (BUCKET_S / 60);
   // coverage = share of 5-minute intervals with ANY availability sample (ICMP or SNMP, whatever its value)
-  const coverage = n ? Math.min(1, new Set([...ping, ...snmp].map((x) => x.t)).size / n) : 0;
+  const coverage = n ? Math.min(1, new Set([...ping, ...snmp, ...agent].map((x) => x.t)).size / n) : 0;
   const cpu = scope.metrics.includes('cpu') ? metricOf(series.cpu?.[d.host], win) : null;
   const mem = scope.metrics.includes('memory') ? metricOf(series.mem?.[d.host], win) : null;
   return {
-    host: d.host, site: d.sites.join(', ') || '-', type: d.types.join(', ') || '-', state, code, availability, downMinutes, longestDownMinutes: longestRun(downFlags) * (BUCKET_S / 60),
+    host: d.host, site: d.sites.join(', ') || '-', type: d.types.join(', ') || '-', state, code, basis: basisOf(code), availability, downMinutes, longestDownMinutes: longestRun(downFlags) * (BUCKET_S / 60),
     coverage, hasData: hasAvail, cpu, mem, icmp: ping.length > 0, snmp: snmp.length > 0,
   };
 }
@@ -86,6 +103,7 @@ export function buildHealthModel({ win, scope, devices, series, fresh = {}, seen
     devices: list, kpis: null, attention: [], observations: [], notes: [],
   };
   model.notes.push('Device state is evaluated at the end of the reporting day from monitoring data only (ICMP ping and SNMP availability reported to Zabbix); NetFlow traffic is never used to decide whether a device is up.');
+  model.notes.push('Availability has three different sources and the report names the one behind each state: ICMP (the device answers ping), SNMP (the SNMP agent is reachable) and Zabbix agent (only the agent on the host answers - it does not prove that interfaces or services are reachable, and gives no availability percentage).');
   model.notes.push('UP / DOWN need a sample in the last 10 minutes of the day. NO DATA = monitored but silent at the end of the day (a stale collection, not proof of an outage). NOT MONITORED = no availability sample in the previous 8 days.');
   model.notes.push('A device that answers ping but has no CPU or memory item stays UP: those columns show N/A (not monitored). Nothing is invented for missing metrics.');
   model.notes.push('Availability = share of 5-minute ICMP intervals that were up (SNMP availability when a device has no ICMP item). Down time counts intervals below 50 % up. CPU and memory are 5-minute averages; a device with several CPU items shows its busiest one.');

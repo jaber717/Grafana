@@ -1,0 +1,59 @@
+# Proposed ADDITIVE Zabbix host-group classification for the Grafana selectors. Nothing here is applied by any tool in this repository:
+# tools/zabbix-group-plan.mjs reads it, compares it with the real Zabbix (read-only) and prints the exact plan for approval.
+#
+# Naming design
+#   Site/<CODE>   a LOCATION (physical or logical site): a branch, a data centre, a lab. A device is NOT a site because its name looks like one;
+#                 leave `site` out when the device does not belong to one location (it stays selectable under Site = All).
+#   Type/<NAME>   the device TYPE / role: Router, Switch, Firewall, LoadBalancer, Server, Simulator. CamelCase, singular, no spaces.
+# A host may have several Site/ groups only if it really spans locations; normally one Site/ and one Type/. Existing groups are never removed.
+# `confirm: true` marks a classification that is a guess from names / items: the planner refuses it until you remove the flag (or pass
+# --include-unconfirmed for a preview). Hosts are identified by their VISIBLE name, exactly as the dashboards show it.
+hosts:
+  - host: SITE-A
+    site: SITE-A
+    type: Router
+    confirm: true            # router of "SITE-A" per the WAN dashboard; confirm the site code
+  - host: SITE-B
+    site: SITE-B
+    type: Router
+    confirm: true
+  - host: STC
+    type: Router
+    confirm: true            # provider-side router: no Site/ group until you decide where it belongs (e.g. Site/PROVIDER-EDGE)
+  - host: MOBILY
+    type: Router
+    confirm: true
+  - host: SAIX-A
+    type: Router
+    confirm: true
+  - host: SAIX-B
+    type: Router
+    confirm: true
+  - host: INT-CORE
+    type: Router
+    confirm: true            # core router; site code to be decided
+  - host: DR-FW01 (QDC-DR-00009)
+    site: DR
+    type: Firewall
+    confirm: true            # FortiGate-style items (fgSys*); confirm "DR" as the site code
+  - host: DR-LB01 (QDC-DR-00010)
+    site: DR
+    type: LoadBalancer
+    confirm: true
+  - host: DR-LEAF01 (QDC-DR-00003)
+    site: DR
+    type: Switch
+    confirm: true
+  - host: DR-LEAF02 (QDC-DR-00004)
+    site: DR
+    type: Switch
+    confirm: true
+  - host: ZABBIX-01
+    type: Server
+    confirm: true
+  - host: grafana-01
+    type: Server
+    confirm: true
+  - host: LAB-SNMPSIM-HW-01 (synthetic LAB only)
+    type: Simulator
+    confirm: true

@@ -3,6 +3,7 @@
 import { NETFLOW_QUERIES, bind } from './queries.mjs';
 import { DS_CH, DS_ZBX, zbxTarget } from './dashboards.mjs';
 import { hostRegex } from './scope.mjs';
+import { PATTERN, TIERS, pickTier } from './item-patterns.mjs';
 
 // ---- NetFlow ----------------------------------------------------------------------------------------------------------------------
 // The four per-IP / per-service tables read the RAW flow table (a full day of records) and can exceed the datasource query timeout on a busy
@@ -67,7 +68,7 @@ export async function fetchInterfaceSeries(g, cfg, win) {
 // Returns the shapes buildHealthModel expects: series per host (5-minute buckets), the last 10 minutes of the window (state at the end of the
 // day) and the hosts that reported availability at all in the 8 days up to the end of the window (separates NO DATA from NOT MONITORED).
 const FRESH_MS = 10 * 60e3, LOOKBACK_MS = 8 * 86400e3;
-const ITEM = { ping: '/^(ICMP ping|Zabbix agent ping)$/', snmp: '/^SNMP agent availability$/', cpu: '/CPU utilization/', mem: '/Memory utilization/' };
+const ITEM = { ping: PATTERN.icmp, snmp: PATTERN.snmp, agent: PATTERN.agent };
 
 function hostOf(frame) {
   const fld = frame.schema.fields[1] || {};
@@ -100,18 +101,28 @@ async function run(g, queries, fromMs, toMs) {
 }
 
 export async function fetchHealthSeries(g, hosts, win) {
-  if (!hosts.length) return { series: { ping: {}, snmp: {}, cpu: {}, mem: {} }, fresh: {}, seen: new Set() };
+  if (!hosts.length) return { series: { ping: {}, snmp: {}, agent: {}, cpu: {}, mem: {} }, fresh: {}, seen: new Set() };
   const hr = hostRegex(hosts.map((h) => h.host));
-  const t = (refId, key, interval = '5m') => { const x = zbxTarget(hr, ITEM[key], refId); x.functions[0].params = [interval, 'avg']; return x; };
-  const day = await run(g, [t('ping', 'ping'), t('snmp', 'snmp'), t('cpu', 'cpu'), t('mem', 'mem')], win.startMs, win.endMs);
-  const end = await run(g, [t('ping', 'ping'), t('snmp', 'snmp')], win.endMs - FRESH_MS, win.endMs);
-  const back = await run(g, [t('ping', 'ping', '1d'), t('snmp', 'snmp', '1d')], win.endMs - LOOKBACK_MS, win.endMs);
+  const t = (refId, key, interval = '5m', pattern = ITEM[key]) => { const x = zbxTarget(hr, pattern, refId); x.functions[0].params = [interval, 'avg']; return x; };
+  // CPU / memory: one query per configured name (precedence order); per device the FIRST name that has data is used, never a mix of two items
+  const tierQ = (kind) => TIERS[kind].map((p, i) => t(`${kind}${i}`, null, '5m', p));
+  const day = await run(g, [t('ping', 'ping'), t('snmp', 'snmp'), t('agent', 'agent'), ...tierQ('cpu'), ...tierQ('memory')], win.startMs, win.endMs);
+  const tiers = { cpu: {}, mem: {} }, cpu = {}, mem = {};
+  for (const h of hosts) {
+    for (const [kind, out, key] of [['cpu', cpu, 'cpu'], ['memory', mem, 'mem']]) {
+      const per = TIERS[kind].map((_, i) => day[`${kind}${i}`][h.host]);
+      const idx = per.findIndex((s) => s && s.length);
+      if (idx >= 0) { out[h.host] = pickTier(per); tiers[key][h.host] = idx; }
+    }
+  }
+  const end = await run(g, [t('ping', 'ping'), t('snmp', 'snmp'), t('agent', 'agent')], win.endMs - FRESH_MS, win.endMs);
+  const back = await run(g, [t('ping', 'ping', '1d'), t('snmp', 'snmp', '1d'), t('agent', 'agent', '1d')], win.endMs - LOOKBACK_MS, win.endMs);
   const last = (a) => (a && a.length ? a[a.length - 1].v : null);
   const fresh = {}, seen = new Set();
   for (const h of hosts) {
-    const p = last(end.ping[h.host]), s = last(end.snmp[h.host]);
-    fresh[h.host] = { ping: p, snmp: s == null ? null : Math.round(s) };
-    if ((back.ping[h.host]?.length || 0) + (back.snmp[h.host]?.length || 0) + (day.ping[h.host]?.length || 0) + (day.snmp[h.host]?.length || 0) > 0) seen.add(h.host);
+    const p = last(end.ping[h.host]), s = last(end.snmp[h.host]), a = last(end.agent[h.host]);
+    fresh[h.host] = { ping: p, snmp: s == null ? null : Math.round(s), agent: a };
+    if ((back.ping[h.host]?.length || 0) + (back.snmp[h.host]?.length || 0) + (back.agent[h.host]?.length || 0) + (day.ping[h.host]?.length || 0) + (day.snmp[h.host]?.length || 0) > 0) seen.add(h.host);
   }
-  return { series: { ping: day.ping, snmp: day.snmp, cpu: day.cpu, mem: day.mem }, fresh, seen };
+  return { series: { ping: day.ping, snmp: day.snmp, agent: day.agent, cpu, mem }, fresh, seen, tiers };
 }

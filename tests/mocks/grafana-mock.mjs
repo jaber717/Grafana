@@ -3,6 +3,7 @@
 // It validates the request/response PLUMBING of the job; the real datasource plugins' semantics are validated on a real Grafana.
 import http from 'node:http';
 import zlib from 'node:zlib';
+import { PATTERN, TIERS } from '../../reports/lib/item-patterns.mjs';
 
 const crcTable = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
 const crc32 = (buf) => { let c = 0xffffffff; for (const b of buf) c = crcTable[(c ^ b) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
@@ -53,10 +54,13 @@ export function startGrafanaMock(opts = {}) {
             if (opts.failQuery === t.refId) { results[t.refId] = { error: 'Code: 60. DB::Exception: Table default.flows does not exist' }; continue; }
             results[t.refId] = { frames: [frameOfRows(opts.netflowRows?.[t.refId] || [])] };
           } else if (t.datasource?.type === 'alexanderzobnin-zabbix-datasource') {
-            const hk = { '/^(ICMP ping|Zabbix agent ping)$/': 'ping', '/^SNMP agent availability$/': 'snmp', '/CPU utilization/': 'cpu', '/Memory utilization/': 'mem' }[t.item?.filter];
+            const hk = { [PATTERN.icmp]: 'ping', [PATTERN.snmp]: 'snmp', [PATTERN.agent]: 'agent', ...Object.fromEntries(TIERS.cpu.map((p) => [p, 'cpu'])), ...Object.fromEntries(TIERS.memory.map((p) => [p, 'mem'])) }[t.item?.filter];
             if (hk && opts.health) {
               const from = Number(q.from), to = Number(q.to);
-              const frames = Object.entries(opts.health.series[hk] || {}).filter(([h]) => (t.host?.filter || '').includes(h)).map(([h, ser]) => {
+              // opts.health.byTier = {cpu|mem: {host: {tierIndex: samples}}}: a device holds an item only for the configured names it really has
+              const ti = hk === 'cpu' ? TIERS.cpu.indexOf(t.item.filter) : hk === 'mem' ? TIERS.memory.indexOf(t.item.filter) : -1;
+              const src = opts.health.byTier?.[hk] ? Object.fromEntries(Object.entries(opts.health.byTier[hk]).map(([h, tiers]) => [h, tiers[ti] || []])) : opts.health.series[hk] || {};
+              const frames = Object.entries(src).filter(([h]) => (t.host?.filter || '').includes(h)).map(([h, ser]) => {
                 const sel = ser.filter((x) => x.t >= from && x.t <= to);
                 return { schema: { name: `${h}: ${hk}`, fields: [{ name: 'time', type: 'time' }, { name: 'value', type: 'number', labels: { host: h, item: hk } }] }, data: { values: [sel.map((x) => x.t), sel.map((x) => x.v)] } };
               }).filter((fr) => fr.data.values[0].length);

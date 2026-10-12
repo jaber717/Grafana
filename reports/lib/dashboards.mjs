@@ -5,6 +5,7 @@
 // from/to window, so the dashboards themselves carry no fixed time range other than a sensible default.
 import { createHash } from 'node:crypto';
 import { NETFLOW_QUERIES, bind } from './queries.mjs';
+import { PATTERN, TIERS } from './item-patterns.mjs';
 
 export const PALETTE = { inbound: '#2F6EBA', outbound: '#E0861B', prev: '#8A94A3', ink: '#1F2933', grid: '#E4E7EB', ok: '#2E8B57', warn: '#D98E04', crit: '#C53030', other: '#7A8AA0' };
 export const DS_CH = { type: 'grafana-clickhouse-datasource', uid: 'netflow-clickhouse' };
@@ -67,6 +68,8 @@ function demoTable(rows, cols) {
 const scopeVar = (name, label, def, description) => ({ type: 'textbox', name, label, description, query: def, current: { text: def, value: def }, options: [{ text: def, value: def, selected: true }], hide: 2 });
 export const VAR_EXPORTERS = scopeVar('exp_scope', 'Exporters (scope)', '', 'Comma separated exporter names of the report scope; empty = all exporters.');
 export const VAR_IFACES = scopeVar('if_scope', 'Interfaces (scope)', '.*', 'Regular expression of the "<site> <interface> in|out" series of the report scope.');
+// per CPU / memory name (precedence order) the hosts that use it: the job sets them so a device is drawn from ONE item only
+export const VAR_TIER_HOSTS = (kind) => TIERS[kind].map((_, i) => scopeVar(`${kind}_hosts_${i}`, `${kind} hosts, name ${i + 1}`, i === 0 ? '/.*/' : '/^$/', 'Zabbix host filter of the devices whose CPU / memory comes from the configured name number ' + (i + 1) + '.'));
 export const VAR_HOSTS = scopeVar('hosts', 'Devices (scope)', '/.*/', 'Zabbix host filter (regular expression literal) of the report scope.');
 
 // ---- NetFlow dashboard ---------------------------------------------------------------------------------------------------------
@@ -155,8 +158,8 @@ export function interfaceDashboard(cfg, source = 'live') {
 // ---- Network Health dashboard --------------------------------------------------------------------------------------------------------
 // The devices come from the ${hosts:raw} variable (a Zabbix host-filter regex literal), so the same dashboard serves every saved scope and any
 // device added to Zabbix later. DEMO: the same panels with TestData series per device.
-const healthTarget = (item, refId, fns = []) => ({
-  datasource: DS_ZBX, queryType: '0', refId, resultFormat: 'time_series', group: { filter: '/.*/' }, host: { filter: '${hosts:raw}' }, application: { filter: '' }, itemTag: { filter: '' }, item: { filter: item },
+const healthTarget = (item, refId, fns = [], hostVar = 'hosts') => ({
+  datasource: DS_ZBX, queryType: '0', refId, resultFormat: 'time_series', group: { filter: '/.*/' }, host: { filter: `\${${hostVar}:raw}` }, application: { filter: '' }, itemTag: { filter: '' }, item: { filter: item },
   functions: [{ def: { name: 'groupBy', category: 'Transform', params: [{ name: 'interval', type: 'string' }, { name: 'function', options: ['avg', 'min', 'max', 'sum', 'count', 'median', 'first', 'last'], type: 'string' }], defaultParams: ['1m', 'avg'] }, params: ['5m', 'avg'], added: false }, ...fns],
   options: { showDisabledItems: false, skipEmptyValues: false, disableDataAlignment: false, useZabbixValueMapping: false }, table: { skipEmptyValues: false }, trigger: { filter: '' }, tags: { filter: '' }, proxy: { filter: '' },
 });
@@ -179,16 +182,16 @@ export function healthDashboard(source = 'live', devices = []) {
   const barFc = { defaults: { unit: 'percent', decimals: 1, min: 0, max: 100, noValue: 'NO DATA', color: { mode: 'thresholds' }, thresholds: { mode: 'absolute', steps: [{ color: PALETTE.crit, value: null }, { color: PALETTE.warn, value: 99 }, { color: PALETTE.ok, value: 99.9 }] } }, overrides: [] };
   const panels = [
     panel(1, 'Availability timeline (ICMP, 30-minute cells)', 'status-history', 24, 8, 0, timelineFc, { showValue: 'never', rowHeight: 0.82, colWidth: 1, cellGap: 0, legend: { showLegend: false }, tooltip: { mode: 'single' } },
-      demo ? demoSeries_('ping', 1, 6) : [(() => { const t = healthTarget('/^(ICMP ping|Zabbix agent ping)$/', 'A'); t.functions[0].params = ['30m', 'min']; return t; })()]),
+      demo ? demoSeries_('ping', 1, 6) : [(() => { const t = healthTarget(PATTERN.icmp, 'A'); t.functions[0].params = ['30m', 'min']; return t; })()]),
     panel(2, 'Availability by device (lowest 9)', 'bargauge', 8, 9, 8, barFc,
       { orientation: 'horizontal', displayMode: 'basic', valueMode: 'color', namePlacement: 'left', showUnfilled: true, sizing: 'auto', minVizHeight: 14, text: { titleSize: 11, valueSize: 11 }, reduceOptions: { values: true, calcs: [], fields: '/^Mean$/' }, legend: { showLegend: false } },
-      demo ? demoSeries_('ping', 100) : [healthTarget('/^(ICMP ping|Zabbix agent ping)$/', 'A', [scaleFn(100), aliasFn('$__zbx_host')])],
+      demo ? demoSeries_('ping', 100) : [healthTarget(PATTERN.icmp, 'A', [scaleFn(100), aliasFn('$__zbx_host')])],
       { transformations: [{ id: 'reduce', options: { mode: 'seriesToRows', reducers: ['mean'], includeTimeField: false } }, { id: 'sortBy', options: { fields: {}, sort: [{ field: 'Mean' }] } }, { id: 'limit', options: { limitField: 9 } }] }),
-    panel(3, 'CPU utilisation (5-minute average)', 'timeseries', 8, 9, 8, tsFc(100), tsOptions(true), demo ? demoSeries_('cpu') : [healthTarget('/CPU utilization/', 'A')]),
-    panel(4, 'Memory utilisation (5-minute average)', 'timeseries', 8, 9, 8, tsFc(100), tsOptions(true), demo ? demoSeries_('mem') : [healthTarget('/Memory utilization/', 'A')]),
+    panel(3, 'CPU utilisation (5-minute average)', 'timeseries', 8, 9, 8, tsFc(100), tsOptions(true), demo ? demoSeries_('cpu') : TIERS.cpu.map((p, i) => healthTarget(p, `cpu${i}`, [], `cpu_hosts_${i}`))),
+    panel(4, 'Memory utilisation (5-minute average)', 'timeseries', 8, 9, 8, tsFc(100), tsOptions(true), demo ? demoSeries_('mem') : TIERS.memory.map((p, i) => healthTarget(p, `mem${i}`, [], `memory_hosts_${i}`))),
   ];
   panels[2].gridPos.x = 8; panels[3].gridPos.x = 16;
-  return dashboard('rpt-health-daily', demo ? 'DEMO - Daily Network Health Report' : 'Daily Network Health Report', panels, ['health', 'zabbix'], [VAR_HOSTS]);
+  return dashboard('rpt-health-daily', demo ? 'DEMO - Daily Network Health Report' : 'Daily Network Health Report', panels, ['health', 'zabbix'], [VAR_HOSTS, ...VAR_TIER_HOSTS('cpu'), ...VAR_TIER_HOSTS('memory')]);
 }
 
 // Revision the report job expects to find on Grafana for the current configuration.

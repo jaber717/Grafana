@@ -6,7 +6,7 @@
   "daily",
   "health",
   "zabbix",
-  "rev:4bea1346f397"
+  "rev:8c689fee1a52"
  ],
  "timezone": "Asia/Riyadh",
  "editable": true,
@@ -36,6 +36,139 @@
      {
       "text": "/.*/",
       "value": "/.*/",
+      "selected": true
+     }
+    ],
+    "hide": 2
+   },
+   {
+    "type": "textbox",
+    "name": "cpu_hosts_0",
+    "label": "cpu hosts, name 1",
+    "description": "Zabbix host filter of the devices whose CPU / memory comes from the configured name number 1.",
+    "query": "/.*/",
+    "current": {
+     "text": "/.*/",
+     "value": "/.*/"
+    },
+    "options": [
+     {
+      "text": "/.*/",
+      "value": "/.*/",
+      "selected": true
+     }
+    ],
+    "hide": 2
+   },
+   {
+    "type": "textbox",
+    "name": "cpu_hosts_1",
+    "label": "cpu hosts, name 2",
+    "description": "Zabbix host filter of the devices whose CPU / memory comes from the configured name number 2.",
+    "query": "/^$/",
+    "current": {
+     "text": "/^$/",
+     "value": "/^$/"
+    },
+    "options": [
+     {
+      "text": "/^$/",
+      "value": "/^$/",
+      "selected": true
+     }
+    ],
+    "hide": 2
+   },
+   {
+    "type": "textbox",
+    "name": "cpu_hosts_2",
+    "label": "cpu hosts, name 3",
+    "description": "Zabbix host filter of the devices whose CPU / memory comes from the configured name number 3.",
+    "query": "/^$/",
+    "current": {
+     "text": "/^$/",
+     "value": "/^$/"
+    },
+    "options": [
+     {
+      "text": "/^$/",
+      "value": "/^$/",
+      "selected": true
+     }
+    ],
+    "hide": 2
+   },
+   {
+    "type": "textbox",
+    "name": "cpu_hosts_3",
+    "label": "cpu hosts, name 4",
+    "description": "Zabbix host filter of the devices whose CPU / memory comes from the configured name number 4.",
+    "query": "/^$/",
+    "current": {
+     "text": "/^$/",
+     "value": "/^$/"
+    },
+    "options": [
+     {
+      "text": "/^$/",
+      "value": "/^$/",
+      "selected": true
+     }
+    ],
+    "hide": 2
+   },
+   {
+    "type": "textbox",
+    "name": "memory_hosts_0",
+    "label": "memory hosts, name 1",
+    "description": "Zabbix host filter of the devices whose CPU / memory comes from the configured name number 1.",
+    "query": "/.*/",
+    "current": {
+     "text": "/.*/",
+     "value": "/.*/"
+    },
+    "options": [
+     {
+      "text": "/.*/",
+      "value": "/.*/",
+      "selected": true
+     }
+    ],
+    "hide": 2
+   },
+   {
+    "type": "textbox",
+    "name": "memory_hosts_1",
+    "label": "memory hosts, name 2",
+    "description": "Zabbix host filter of the devices whose CPU / memory comes from the configured name number 2.",
+    "query": "/^$/",
+    "current": {
+     "text": "/^$/",
+     "value": "/^$/"
+    },
+    "options": [
+     {
+      "text": "/^$/",
+      "value": "/^$/",
+      "selected": true
+     }
+    ],
+    "hide": 2
+   },
+   {
+    "type": "textbox",
+    "name": "memory_hosts_2",
+    "label": "memory hosts, name 3",
+    "description": "Zabbix host filter of the devices whose CPU / memory comes from the configured name number 3.",
+    "query": "/^$/",
+    "current": {
+     "text": "/^$/",
+     "value": "/^$/"
+    },
+    "options": [
+     {
+      "text": "/^$/",
+      "value": "/^$/",
       "selected": true
      }
     ],
@@ -146,7 +279,7 @@
       "filter": ""
      },
      "item": {
-      "filter": "/^(ICMP ping|Zabbix agent ping)$/"
+      "filter": "/^(ICMP ping)$/"
      },
      "functions": [
       {
@@ -290,7 +423,7 @@
       "filter": ""
      },
      "item": {
-      "filter": "/^(ICMP ping|Zabbix agent ping)$/"
+      "filter": "/^(ICMP ping)$/"
      },
      "functions": [
       {
@@ -475,13 +608,250 @@
       "uid": "zabbix-lab"
      },
      "queryType": "0",
-     "refId": "A",
+     "refId": "cpu0",
      "resultFormat": "time_series",
      "group": {
       "filter": "/.*/"
      },
      "host": {
-      "filter": "${hosts:raw}"
+      "filter": "${cpu_hosts_0:raw}"
+     },
+     "application": {
+      "filter": ""
+     },
+     "itemTag": {
+      "filter": ""
+     },
+     "item": {
+      "filter": "/Huawei: Custom CPU/"
+     },
+     "functions": [
+      {
+       "def": {
+        "name": "groupBy",
+        "category": "Transform",
+        "params": [
+         {
+          "name": "interval",
+          "type": "string"
+         },
+         {
+          "name": "function",
+          "options": [
+           "avg",
+           "min",
+           "max",
+           "sum",
+           "count",
+           "median",
+           "first",
+           "last"
+          ],
+          "type": "string"
+         }
+        ],
+        "defaultParams": [
+         "1m",
+         "avg"
+        ]
+       },
+       "params": [
+        "5m",
+        "avg"
+       ],
+       "added": false
+      }
+     ],
+     "options": {
+      "showDisabledItems": false,
+      "skipEmptyValues": false,
+      "disableDataAlignment": false,
+      "useZabbixValueMapping": false
+     },
+     "table": {
+      "skipEmptyValues": false
+     },
+     "trigger": {
+      "filter": ""
+     },
+     "tags": {
+      "filter": ""
+     },
+     "proxy": {
+      "filter": ""
+     }
+    },
+    {
+     "datasource": {
+      "type": "alexanderzobnin-zabbix-datasource",
+      "uid": "zabbix-lab"
+     },
+     "queryType": "0",
+     "refId": "cpu1",
+     "resultFormat": "time_series",
+     "group": {
+      "filter": "/.*/"
+     },
+     "host": {
+      "filter": "${cpu_hosts_1:raw}"
+     },
+     "application": {
+      "filter": ""
+     },
+     "itemTag": {
+      "filter": ""
+     },
+     "item": {
+      "filter": "/Huawei CPU utilization/"
+     },
+     "functions": [
+      {
+       "def": {
+        "name": "groupBy",
+        "category": "Transform",
+        "params": [
+         {
+          "name": "interval",
+          "type": "string"
+         },
+         {
+          "name": "function",
+          "options": [
+           "avg",
+           "min",
+           "max",
+           "sum",
+           "count",
+           "median",
+           "first",
+           "last"
+          ],
+          "type": "string"
+         }
+        ],
+        "defaultParams": [
+         "1m",
+         "avg"
+        ]
+       },
+       "params": [
+        "5m",
+        "avg"
+       ],
+       "added": false
+      }
+     ],
+     "options": {
+      "showDisabledItems": false,
+      "skipEmptyValues": false,
+      "disableDataAlignment": false,
+      "useZabbixValueMapping": false
+     },
+     "table": {
+      "skipEmptyValues": false
+     },
+     "trigger": {
+      "filter": ""
+     },
+     "tags": {
+      "filter": ""
+     },
+     "proxy": {
+      "filter": ""
+     }
+    },
+    {
+     "datasource": {
+      "type": "alexanderzobnin-zabbix-datasource",
+      "uid": "zabbix-lab"
+     },
+     "queryType": "0",
+     "refId": "cpu2",
+     "resultFormat": "time_series",
+     "group": {
+      "filter": "/.*/"
+     },
+     "host": {
+      "filter": "${cpu_hosts_2:raw}"
+     },
+     "application": {
+      "filter": ""
+     },
+     "itemTag": {
+      "filter": ""
+     },
+     "item": {
+      "filter": "/hwCpuDevDuty/"
+     },
+     "functions": [
+      {
+       "def": {
+        "name": "groupBy",
+        "category": "Transform",
+        "params": [
+         {
+          "name": "interval",
+          "type": "string"
+         },
+         {
+          "name": "function",
+          "options": [
+           "avg",
+           "min",
+           "max",
+           "sum",
+           "count",
+           "median",
+           "first",
+           "last"
+          ],
+          "type": "string"
+         }
+        ],
+        "defaultParams": [
+         "1m",
+         "avg"
+        ]
+       },
+       "params": [
+        "5m",
+        "avg"
+       ],
+       "added": false
+      }
+     ],
+     "options": {
+      "showDisabledItems": false,
+      "skipEmptyValues": false,
+      "disableDataAlignment": false,
+      "useZabbixValueMapping": false
+     },
+     "table": {
+      "skipEmptyValues": false
+     },
+     "trigger": {
+      "filter": ""
+     },
+     "tags": {
+      "filter": ""
+     },
+     "proxy": {
+      "filter": ""
+     }
+    },
+    {
+     "datasource": {
+      "type": "alexanderzobnin-zabbix-datasource",
+      "uid": "zabbix-lab"
+     },
+     "queryType": "0",
+     "refId": "cpu3",
+     "resultFormat": "time_series",
+     "group": {
+      "filter": "/.*/"
+     },
+     "host": {
+      "filter": "${cpu_hosts_3:raw}"
      },
      "application": {
       "filter": ""
@@ -610,13 +980,171 @@
       "uid": "zabbix-lab"
      },
      "queryType": "0",
-     "refId": "A",
+     "refId": "mem0",
      "resultFormat": "time_series",
      "group": {
       "filter": "/.*/"
      },
      "host": {
-      "filter": "${hosts:raw}"
+      "filter": "${memory_hosts_0:raw}"
+     },
+     "application": {
+      "filter": ""
+     },
+     "itemTag": {
+      "filter": ""
+     },
+     "item": {
+      "filter": "/Huawei - Custom Memory/"
+     },
+     "functions": [
+      {
+       "def": {
+        "name": "groupBy",
+        "category": "Transform",
+        "params": [
+         {
+          "name": "interval",
+          "type": "string"
+         },
+         {
+          "name": "function",
+          "options": [
+           "avg",
+           "min",
+           "max",
+           "sum",
+           "count",
+           "median",
+           "first",
+           "last"
+          ],
+          "type": "string"
+         }
+        ],
+        "defaultParams": [
+         "1m",
+         "avg"
+        ]
+       },
+       "params": [
+        "5m",
+        "avg"
+       ],
+       "added": false
+      }
+     ],
+     "options": {
+      "showDisabledItems": false,
+      "skipEmptyValues": false,
+      "disableDataAlignment": false,
+      "useZabbixValueMapping": false
+     },
+     "table": {
+      "skipEmptyValues": false
+     },
+     "trigger": {
+      "filter": ""
+     },
+     "tags": {
+      "filter": ""
+     },
+     "proxy": {
+      "filter": ""
+     }
+    },
+    {
+     "datasource": {
+      "type": "alexanderzobnin-zabbix-datasource",
+      "uid": "zabbix-lab"
+     },
+     "queryType": "0",
+     "refId": "mem1",
+     "resultFormat": "time_series",
+     "group": {
+      "filter": "/.*/"
+     },
+     "host": {
+      "filter": "${memory_hosts_1:raw}"
+     },
+     "application": {
+      "filter": ""
+     },
+     "itemTag": {
+      "filter": ""
+     },
+     "item": {
+      "filter": "/Huawei Memory utilization/"
+     },
+     "functions": [
+      {
+       "def": {
+        "name": "groupBy",
+        "category": "Transform",
+        "params": [
+         {
+          "name": "interval",
+          "type": "string"
+         },
+         {
+          "name": "function",
+          "options": [
+           "avg",
+           "min",
+           "max",
+           "sum",
+           "count",
+           "median",
+           "first",
+           "last"
+          ],
+          "type": "string"
+         }
+        ],
+        "defaultParams": [
+         "1m",
+         "avg"
+        ]
+       },
+       "params": [
+        "5m",
+        "avg"
+       ],
+       "added": false
+      }
+     ],
+     "options": {
+      "showDisabledItems": false,
+      "skipEmptyValues": false,
+      "disableDataAlignment": false,
+      "useZabbixValueMapping": false
+     },
+     "table": {
+      "skipEmptyValues": false
+     },
+     "trigger": {
+      "filter": ""
+     },
+     "tags": {
+      "filter": ""
+     },
+     "proxy": {
+      "filter": ""
+     }
+    },
+    {
+     "datasource": {
+      "type": "alexanderzobnin-zabbix-datasource",
+      "uid": "zabbix-lab"
+     },
+     "queryType": "0",
+     "refId": "mem2",
+     "resultFormat": "time_series",
+     "group": {
+      "filter": "/.*/"
+     },
+     "host": {
+      "filter": "${memory_hosts_2:raw}"
      },
      "application": {
       "filter": ""

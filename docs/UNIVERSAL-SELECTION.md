@@ -92,7 +92,7 @@ selected). `Status`: **ACTIVE** (flows in the last 5 min), **IDLE / NO RECENT FL
 
 1. Host groups `Site/<NAME>` (site) and `Type/<NAME>` (device type) on every host you want to see by site / type. Hosts without them still appear under **All**.
 2. Availability: item **`ICMP ping`** and/or **`SNMP agent availability`** (the standard Zabbix names).
-3. Load: items whose name contains `CPU utilization` and `Memory utilization` (standard SNMP templates).
+3. Load: processed **percentage** items whose names are listed in `config/monitoring-items.json` (default: Cisco / Fortinet / Linux `CPU utilization`, `Memory utilization`, and the Huawei custom items); the first configured name that matches a device wins, so a device never shows two CPU or memory values. See docs/LAB-COMPATIBILITY-AND-ROLLOUT.md §2.
 4. Interfaces (WAN, interface report): `Interface <name>(<description>): Bits received` / `Bits sent` / `Speed` / `Operational status` / error and discard items.
 5. NetFlow: Akvorado's `ExporterName` for a router equals the router's Zabbix host name.
 

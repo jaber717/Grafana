@@ -3,30 +3,14 @@
 //   ZABBIX_URL=https://zabbix/api_jsonrpc.php ZABBIX_TOKEN_FILE=/path/token  node tools/lab-compat-check.mjs [--exporters file] [--json]
 //   --exporters FILE   one ExporterName per line (from ClickHouse:  SELECT DISTINCT ExporterName FROM default.flows_1h0m0s WHERE TimeReceived > now() - INTERVAL 30 DAY)
 import { readFileSync } from 'node:fs';
-import https from 'node:https';
+import { REGEX, resolveItem, TIER_REGEX } from '../reports/lib/item-patterns.mjs';
 
 const arg = (k) => { const i = process.argv.indexOf(`--${k}`); return i > 0 ? process.argv[i + 1] : null; };
-// credentials: ZABBIX_ENV_FILE (KEY=VALUE file with ZABBIX_API_URL / ZABBIX_API_TOKEN, kept outside Git) or ZABBIX_URL + ZABBIX_TOKEN_FILE. Never printed.
-// TLS is always verified: ZABBIX_CA_FILE = the LAB's (self-signed / private) certificate chain in PEM.
-const envf = {};
-if (process.env.ZABBIX_ENV_FILE) for (const l of readFileSync(process.env.ZABBIX_ENV_FILE, "utf8").split(/\r?\n/)) { const m = l.match(/^\s*([A-Z_]+)=(.*)$/); if (m) envf[m[1]] = m[2].trim(); }
-const url = envf.ZABBIX_API_URL || process.env.ZABBIX_URL;
-const token = envf.ZABBIX_API_TOKEN || (process.env.ZABBIX_TOKEN_FILE ? readFileSync(process.env.ZABBIX_TOKEN_FILE, 'utf8').trim() : null);
-if (!url || !token) { console.error('set ZABBIX_ENV_FILE, or ZABBIX_URL and ZABBIX_TOKEN_FILE (read-only token)'); process.exit(1); }
-const ca = process.env.ZABBIX_CA_FILE ? readFileSync(process.env.ZABBIX_CA_FILE) : undefined;
-let seq = 0;
-const call = (method, params) => new Promise((resolve, reject) => {
-  const u = new URL(url);
-  const body = JSON.stringify({ jsonrpc: '2.0', method, params, id: ++seq });
-  const r = https.request({ method: 'POST', hostname: u.hostname, port: u.port, path: u.pathname, ca, timeout: 60000, headers: { 'Content-Type': 'application/json-rpc', Authorization: `Bearer ${token}`, 'Content-Length': Buffer.byteLength(body) } }, (res) => {
-    let t = ''; res.on('data', (d) => (t += d));
-    res.on('end', () => { try { const j = JSON.parse(t); j.error ? reject(new Error(`${method}: ${j.error.message} ${j.error.data || ''}`)) : resolve(j.result); } catch (e) { reject(e); } });
-  });
-  r.on('error', reject); r.write(body); r.end();
-});
+import { connect } from './lib/zabbix-readonly.mjs';
+const { call } = connect();
 
 // what the dashboards / reports look for (same patterns as tools/monitoring and reports/lib)
-const WANT = { ping: /^(ICMP ping|Zabbix agent ping)$/, snmp: /^SNMP agent availability$/, cpu: /CPU utilization/, mem: /Memory utilization/ };
+const WANT = { ping: REGEX.icmp, snmp: REGEX.snmp, agent: REGEX.agent, cpu: REGEX.cpu, mem: REGEX.memory };   // config/monitoring-items.json
 const LOOKS = { cpu: /cpu|processor|处理器/i, mem: /mem|ram/i };
 const IFACE = /^Interface (.+?)\((.*)\): Bits (received|sent)$/;
 const IFACE_LIKE = /bits (received|sent)|ifhc(in|out)octets|net\.if\.(in|out)\[/i;
@@ -56,7 +40,8 @@ for (const { h, items: its } of byHost.values()) {
   const gs = (h.hostgroups || []).map((g) => g.name);
   const row = {
     host: h.name, technical: h.host, enabled: String(h.status) === '0', sites: gs.filter((g) => g.startsWith('Site/')), types: gs.filter((g) => g.startsWith('Type/')), otherGroups: gs.filter((g) => !/^(Site|Type)\//.test(g)),
-    ping: names(WANT.ping, its).length, snmp: names(WANT.snmp, its).length,
+    ping: names(WANT.ping, its).length, snmp: names(WANT.snmp, its).length, agent: names(WANT.agent, its).length,
+    huawei: /huawei|vrp|2011/i.test([h.name, h.host, ...(h.tags || []).map((t) => `${t.tag}=${t.value}`), ...its.filter((i) => /system\.(descr|objectid|hw\.model)/.test(i.key_)).map((i) => i.lastvalue), ...its.map((i) => `${i.name} ${i.key_}`)].join(' ')),
     cpu: names(WANT.cpu, its).map((i) => i.name), mem: names(WANT.mem, its).map((i) => i.name),
     cpuCandidates: its.filter((i) => LOOKS.cpu.test(i.name) && !WANT.cpu.test(i.name)).map((i) => `${i.name} [${i.key_}]`).slice(0, 6),
     memCandidates: its.filter((i) => LOOKS.mem.test(i.name) && !WANT.mem.test(i.name)).map((i) => `${i.name} [${i.key_}]`).slice(0, 6),
@@ -67,14 +52,18 @@ for (const { h, items: its } of byHost.values()) {
     ifSpeed: its.filter((i) => /^Interface .*: Speed$/.test(i.name)).length,
     descr: ((its.find((i) => i.key_ === 'system.descr') || {}).lastvalue || '').slice(0, 70), tags: (h.tags || []).map((t) => t.tag + '=' + t.value), inventory: Object.entries(h.inventory && !Array.isArray(h.inventory) ? h.inventory : {}).filter(([, v]) => v).map(([k, v]) => k + '=' + v), interfaceTypes: [...new Set((h.interfaces || []).map((i) => ({ 1: 'agent', 2: 'snmp', 3: 'ipmi', 4: 'jmx' }[i.type] || i.type)))],
   };
+  const nm = its.map((i) => i.name);
+  row.cpuUsed = resolveItem('cpu', nm)?.pattern || null; row.memUsed = resolveItem('memory', nm)?.pattern || null;
+  for (const [k, kind] of [['CPU', 'cpu'], ['Memory', 'memory']]) { const hit = TIER_REGEX[kind].map((r, i) => (nm.some((n) => r.test(n)) ? i : -1)).filter((i) => i >= 0); const used = resolveItem(kind, nm); if (used && new Set(nm.filter((n) => TIER_REGEX[kind].some((r) => r.test(n))).map((n) => TIER_REGEX[kind].findIndex((r) => r.test(n)))).size > 1) find('info', `${row.host}: several ${k} items (${nm.filter((n) => TIER_REGEX[kind].some((r) => r.test(n))).join(' | ')}): '${used.pattern}' is used, the others are ignored (precedence in config/monitoring-items.json)`); }
   out.hosts.push(row);
   if (!row.enabled) continue;
   if (!row.sites.length) find('warn', `${row.host}: no Site/<NAME> host group - appears only under Site = All`);
   if (!row.types.length) find('warn', `${row.host}: no Type/<NAME> host group - appears only under Device type = All`);
-  if (!row.ping && !row.snmp) find('warn', `${row.host}: neither 'ICMP ping' / 'Zabbix agent ping' nor 'SNMP agent availability' - shows NOT MONITORED`);
+  if (!row.ping && !row.snmp && !row.agent) find('warn', `${row.host}: no ICMP, SNMP-availability or Zabbix-agent availability item - shows NOT MONITORED`);
+  else if (!row.ping && !row.snmp) find('info', `${row.host}: availability only from the Zabbix agent (UP = the agent answers, not that interfaces or services are reachable; no availability percentage)`);
   if (!row.cpu.length) find(row.cpuCandidates.length ? 'gap' : 'info', `${row.host}: no item matching /CPU utilization/${row.cpuCandidates.length ? `; possible CPU items: ${row.cpuCandidates.join(' | ')}` : ' (no CPU item at all)'}`);
   if (!row.mem.length) find(row.memCandidates.length ? 'gap' : 'info', `${row.host}: no item matching /Memory utilization/${row.memCandidates.length ? `; possible memory items: ${row.memCandidates.join(' | ')}` : ' (no memory item at all)'}`);
-  if (/huawei|vrp/i.test(row.descr) && (!row.cpu.length || !row.mem.length)) find('gap', `${row.host}: Huawei device without matching CPU/Memory items (cpu: ${row.cpu.length}, memory: ${row.mem.length}); candidates: ${[...row.cpuCandidates, ...row.memCandidates].join(' | ') || 'none'}`);
+  if (row.huawei && (!row.cpu.length || !row.mem.length)) find('gap', `${row.host}: Huawei device without matching CPU/Memory items (cpu: ${row.cpu.length}, memory: ${row.mem.length}); candidates: ${[...row.cpuCandidates, ...row.memCandidates].join(' | ') || 'none'}`);
   if (row.ifaceLike.length) find(row.ifaces > 0 || !row.snmp ? 'info' : 'gap', `${row.host}: traffic items not named "Interface X(desc): Bits received/sent": ${row.ifaceLike.join(' | ')}`);
 }
 // duplicate visible names break the name-based filters
@@ -85,6 +74,11 @@ if (diff.length) find('info', `${diff.length} host(s) have a visible name differ
 if (!out.groups.some((g) => g.startsWith('Site/'))) find('gap', 'no host group starts with "Site/": the Site selector would be empty. Either create the groups or configure another prefix (tools/monitoring/scope.mjs SITE_PREFIX) - candidate groups: ' + out.groups.join(', '));
 if (!out.groups.some((g) => g.startsWith('Type/'))) find('gap', 'no host group starts with "Type/": the Device type selector would be empty - candidate groups: ' + out.groups.join(', '));
 
+// Huawei: only judged when a Huawei device actually exists in the visible inventory
+const hw = out.hosts.filter((r) => r.enabled && r.huawei);
+out.huawei = hw.length ? { devices: hw.map((r) => r.host), withCpu: hw.filter((r) => r.cpu.length).length, withMemory: hw.filter((r) => r.mem.length).length } : 'NOT TESTABLE';
+if (!hw.length) find('info', 'Huawei CPU/Memory: NOT TESTABLE - no Huawei device is visible in this inventory (add the item names to config/monitoring-items.json when they are known; raw counters are never accepted)');
+
 // exporter mapping
 const exp = arg('exporters');
 if (exp) {
@@ -92,7 +86,11 @@ if (exp) {
   const vis = new Set(monitored.map((h) => h.name)), tech = new Set(monitored.map((h) => h.host));
   out.exporters = { matchVisible: ex.filter((e) => vis.has(e)), matchTechnicalOnly: ex.filter((e) => !vis.has(e) && tech.has(e)), unmatched: ex.filter((e) => !vis.has(e) && !tech.has(e)), hostsWithoutExporter: monitored.map((h) => h.name).filter((n) => !ex.includes(n)) };
   for (const e of out.exporters.matchTechnicalOnly) find('gap', `exporter '${e}' equals a technical host name, not the visible name`);
-  for (const e of out.exporters.unmatched) find('gap', `exporter '${e}' matches no Zabbix host (shows NOT IN INVENTORY)`);
+  const norm = (x) => x.toLowerCase().replace(/^(pnet|lab)[-_]/, '').replace(/\(.*\)/, '').trim();
+  for (const e of out.exporters.unmatched) {
+    const cand = monitored.filter((h) => norm(h.name) === norm(e) || norm(h.host) === norm(e) || h.name.toLowerCase().includes(e.toLowerCase()) || norm(h.host).includes(norm(e)) || norm(e).includes(norm(h.host))).map((h) => h.name);
+    find('gap', `exporter '${e}' matches no Zabbix host (shows NOT IN INVENTORY)${cand.length ? `; probable device: ${cand.join(', ')} - rename the exporter in Akvorado to the visible host name, or the Zabbix host to the exporter name` : '; no similar host'}`);
+  }
 }
 
 if (process.argv.includes('--json')) { console.log(JSON.stringify(out, null, 1)); process.exit(0); }

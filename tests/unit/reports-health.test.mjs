@@ -87,10 +87,10 @@ test('device state codes follow the dashboard: the report and the dashboard cann
     return 'NOT MONITORED';
   };
   const label = { UP: 'UP', DOWN: 'DOWN', UNKNOWN: 'UNKNOWN', NO_DATA: 'NO DATA', NOT_MONITORED: 'NOT MONITORED' };
-  for (const seen of [false, true]) for (const ping of [null, 0, 1]) for (const snmp of [null, 0, 1, 2]) {
-    const code = stateCode({ ping, snmp, seen });
-    if (!seen && (ping != null || snmp != null)) continue;      // data cannot be fresh without having been seen
-    assert.equal(label[stateOf(code)], dashLabel(code), `code ${code} (seen ${seen}, ping ${ping}, snmp ${snmp})`);
+  for (const seen of [false, true]) for (const ping of [null, 0, 1]) for (const snmp of [null, 0, 1, 2]) for (const agent of [null, 0, 1]) {
+    const code = stateCode({ ping, snmp, agent, seen });
+    if (!seen && (ping != null || snmp != null || agent != null)) continue;      // data cannot be fresh without having been seen
+    assert.equal(label[stateOf(code)], dashLabel(code), `code ${code} (seen ${seen}, ping ${ping}, snmp ${snmp}, agent ${agent})`);
   }
 });
 
@@ -170,4 +170,44 @@ test('scope devices with unsafe names are skipped, never interpolated into queri
   const r = await resolveRunScope({ g: null, settings: { scopesFile: null, retry: { attempts: 1, baseMs: 1, maxMs: 1 } }, scopeId: null, kinds: ['health'], log: (e) => events.push(e), deps: { inventory: async () => inv } });
   assert.deepEqual(r.devices.map((d) => d.host), ['ok-1', 'r1.example']);
   assert.deepEqual(events.filter((e) => e.event === 'device-skipped').map((e) => e.host), ['a,b', "bad'name"]);
+});
+
+test('availability sources stay distinct: ICMP first, then SNMP, then Zabbix agent; the agent proves nothing about interfaces', async () => {
+  const { stateCode, stateOf, basisOf } = await import('../../reports/lib/health-report.mjs');
+  const st = (o) => { const c = stateCode({ seen: true, ...o }); return [stateOf(c), basisOf(c)]; };
+  assert.deepEqual(st({ ping: 1, agent: 0 }), ['UP', 'ICMP']);
+  assert.deepEqual(st({ ping: 0, agent: 1 }), ['DOWN', 'ICMP'], 'ICMP failing is not hidden by a healthy agent');
+  assert.deepEqual(st({ snmp: 1, agent: 0 }), ['UP', 'SNMP']);
+  assert.deepEqual(st({ snmp: 2, agent: 1 }), ['DOWN', 'SNMP']);
+  assert.deepEqual(st({ agent: 1 }), ['UP', 'Agent']);
+  assert.deepEqual(st({ agent: 0 }), ['DOWN', 'Agent']);
+  assert.deepEqual(st({ snmp: 0, agent: 1 }), ['UP', 'Agent'], 'SNMP unknown does not override a working agent');
+  assert.deepEqual(st({ snmp: 0 }), ['UNKNOWN', 'SNMP']);
+  assert.deepEqual(st({}), ['NO_DATA', null]);
+  // an agent-only device is UP but has no availability percentage and says "Agent" as its basis
+  const dev = [{ host: 'srv', sites: [], types: [] }];
+  const t0 = win.startMs;
+  const m = buildHealthModel({ win, scope: ALL_SCOPE, devices: dev, series: { ping: {}, snmp: {}, agent: { srv: Array.from({ length: 288 }, (_, k) => ({ t: t0 + k * 300e3, v: 1 })) }, cpu: {}, mem: {} }, fresh: { srv: { agent: 1 } }, nowMs: NOW });
+  assert.equal(m.devices[0].state, 'UP');
+  assert.equal(m.devices[0].basis, 'Agent');
+  assert.equal(m.devices[0].availability, null);
+  assert.match(m.notes.join(' '), /does not prove that interfaces or services are reachable/);
+});
+
+test('item patterns: Cisco and Huawei CPU / memory names are configured, never hard-coded, and raw counters are refused', async () => {
+  const { REGEX, PATTERN } = await import('../../reports/lib/item-patterns.mjs');
+  for (const n of ['#1: CPU utilization', 'CPU utilization', 'Huawei: Custom CPU']) assert.ok(REGEX.cpu.test(n), n);
+  for (const n of ['Processor: Memory utilization', 'I/O: Memory utilization', 'Memory utilization']) assert.ok(REGEX.memory.test(n), n);
+  for (const n of ['Huawei - Memory Raw', 'Processor: Free memory', 'Total memory', 'Used memory']) assert.ok(!REGEX.memory.test(n), `${n} is not a utilisation percentage`);
+  assert.ok(REGEX.icmp.test('ICMP ping') && !REGEX.icmp.test('Zabbix agent ping') && REGEX.agent.test('Zabbix agent ping') && !REGEX.agent.test('Version of Zabbix agent running'));
+  assert.match(PATTERN.cpu, /Huawei: Custom CPU/);
+  const dash = JSON.stringify(JSON.parse((await import('node:fs')).readFileSync(new URL('../../dashboards/noc/noc-device-health.json', import.meta.url), 'utf8')).panels);
+  assert.ok(dash.includes('Huawei: Custom CPU'), 'the generated dashboard carries the configured CPU names');
+  const { writeFileSync, mkdtempSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const d = mkdtempSync(`${tmpdir()}/mi-`);
+  const bad = `${d}/bad.json`;
+  writeFileSync(bad, JSON.stringify({ availability: { icmp: ['ICMP ping'], snmp: ['x'], agent: ['y'] }, cpu: { match: 'contains', names: ['CPU'] }, memory: { match: 'contains', names: ['Huawei - Memory Raw'] } }));
+  const r = (await import('node:child_process')).spawnSync(process.execPath, ['-e', "import('./reports/lib/item-patterns.mjs')"], { env: { ...process.env, MONITORING_ITEMS_FILE: bad }, encoding: 'utf8', cwd: new URL('../..', import.meta.url) });
+  assert.match(r.stderr, /raw counters are not utilisation percentages/);
 });

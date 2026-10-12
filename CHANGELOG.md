@@ -11,6 +11,10 @@ Daily NetFlow, Interface and Network Health reports rendered by Grafana (docs/DA
 * TestData datasource `noc-inventory` (built in, local only) in `config/datasources*.json`; the release gate accepts bundled datasource types.
 * Richer Zabbix mock (awkward devices, trends, runtime onboarding); `tools/netflow/test-queries.mjs` understands the Zabbix-backed selectors.
 
+### Added — vendor-agnostic CPU / memory and availability semantics
+* `config/monitoring-items.json`: configurable, precedence-ordered item names (Huawei custom CPU / memory, Cisco, Fortinet, Linux …); raw counters refused; one value per device and metric in Device Health and the Health report. Availability is split into ICMP, SNMP and Zabbix agent (agent = host agent only), with a Basis column in the report.
+* Tools: read-only LAB compatibility checker (verified TLS), additive host-group migration planner (`tools/zabbix-group-plan.mjs`), Huawei fixtures and tests.
+
 ### Added — reports
 * **Network Health report** (`Daily-Network-Health-<date>.pdf`, dashboard `rpt-health-daily`) and **saved scopes** (`scopes.yaml`, `--scope`, `grafana-report scopes`): site, device type, devices, interfaces, metrics for all three reports; scope resolved from the Zabbix inventory at run time. E-mail and Telegram carry three PDFs and the scope.
 * `bin/grafana-report` (+ `reports/`): `run`, `generate`, `deliver`, `test-delivery`, `check-config`, `build-dashboards`, `discover`, `status`, `schedule`, `load-image`, `demo`. Dependency-free Node.js.

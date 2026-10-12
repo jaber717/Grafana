@@ -42,8 +42,8 @@ test('device health: all five states are distinct in the mapping and a reachable
   const text = JSON.stringify(map);
   for (const s of ['UP', 'DOWN', 'UNKNOWN', 'NO DATA', 'NOT MONITORED']) assert.ok(text.includes(`"${s}"`), s);
   // code = SEEN(1000) + PING(100 down / 200 up) + SNMP(1 unknown / 2 ok / 3 unavailable); CPU and Memory are not part of it
-  const calc = status.transformations.find((t) => t.id === 'calculateField').options.reduce.include;
-  assert.deepEqual(calc, ['PING', 'SNMP', 'SEEN']);
+  const calc = status.transformations.find((t) => t.id === 'calculateField' && t.options.alias === 'STATE').options.reduce.include;
+  assert.deepEqual(calc, ['PING', 'SNMP', 'AGENT', 'SEEN']);
   const vals = map[0].options;
   assert.equal(vals[1002].text, 'UP');       // SNMP-only device
   assert.equal(map.find((m) => m.type === 'range' && m.options.from === 1200).options.result.text, 'UP');   // ping up, any SNMP/CPU/Memory

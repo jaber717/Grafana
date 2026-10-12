@@ -37,7 +37,7 @@ export function buildHealthHtml(model, images = {}) {
 
 const devCols = (m) => [
   { key: 'host', label: 'Device' }, { key: 'site', label: 'Site' }, { key: 'type', label: 'Type' },
-  { label: 'State at end of day', fmt: (d) => pill(d.state) }, { label: 'Availability', align: 'r', fmt: (d) => esc(pct(d.availability, 2)) },
+  { label: 'State at end of day', fmt: (d) => pill(d.state) }, { label: 'Basis', fmt: (d) => esc(d.basis || '-') }, { label: 'Availability', align: 'r', fmt: (d) => esc(pct(d.availability, 2)) },
   { label: 'Down time', align: 'r', fmt: (d) => esc(d.availability == null ? 'N/A' : `${d.downMinutes} min`) }, { label: 'Coverage', align: 'r', fmt: (d) => esc(d.hasData ? pct(d.coverage * 100) : 'N/A') },
   ...(m.scope.metrics.includes('cpu') ? [{ label: 'CPU avg', align: 'r', fmt: (d) => esc(metric(d.cpu, 'avg')) }, { label: 'CPU peak', align: 'r', fmt: (d) => esc(metric(d.cpu, 'peak')) }] : []),
   ...(m.scope.metrics.includes('memory') ? [{ label: 'Memory avg', align: 'r', fmt: (d) => esc(metric(d.mem, 'avg')) }, { label: 'Memory peak', align: 'r', fmt: (d) => esc(metric(d.mem, 'peak')) }] : []),

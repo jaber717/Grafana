@@ -11,6 +11,7 @@ import { buildHealthModel } from './health-report.mjs';
 import { buildHealthHtml, HEALTH_SLOTS, HEALTH_FILE } from './health-html.mjs';
 import { loadScopes, pickScope, isAllScope, needsInventory, resolveDevices, scopeInterfaces, scopeLabel, hostRegex, isSafeName } from './scope.mjs';
 import { fetchInventory } from './inventory.mjs';
+import { TIERS } from './item-patterns.mjs';
 import { buildNetflowHtml, NETFLOW_SLOTS, NETFLOW_FILE, mmToPx } from './netflow-html.mjs';
 import { buildInterfaceHtml, slotFor, UTIL_SLOT, INTERFACE_FILE } from './interface-html.mjs';
 import { interfacePanelId, liveRevision } from './dashboards.mjs';
@@ -88,6 +89,7 @@ export async function generateOne(kind, ctx) {
     model = buildHealthModel({ win, scope, devices: fx.devices, series: fx.series, fresh: fx.fresh, seen: fx.seen, nowMs, demo: !!demo, scopeText: sText });
     if (model.status !== 'NO_DATA') {
       const hvars = demo ? {} : { hosts: hostRegex(devices.map((d) => d.host)) };
+      if (!demo) for (const [kind, key] of [['cpu', 'cpu'], ['memory', 'mem']]) for (let i = 0; i < TIERS[kind].length; i++) hvars[`${kind}_hosts_${i}`] = hostRegex(devices.filter((d) => fx.tiers?.[key]?.[d.host] === i).map((d) => d.host));
       for (const [name, slot] of Object.entries(HEALTH_SLOTS)) {
         if ((name === 'cpu' && !scope.metrics.includes('cpu')) || (name === 'mem' && !scope.metrics.includes('memory'))) continue;
         images[name] = await render(DASH_UID.health, slot, slot.panelId, hvars);
