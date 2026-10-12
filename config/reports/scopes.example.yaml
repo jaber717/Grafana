@@ -1,0 +1,42 @@
+# Saved report scopes - which part of the estate a daily report covers. Copy to /etc/grafana-platform/reports/scopes.yaml and edit.
+# One scope drives all three reports of a run:   grafana-report run --scope <id>      (or REPORT_SCOPE=<id> in report.env)
+#
+# Nothing here is a Zabbix item id. A scope is made of NAMES that already exist in Zabbix, and it is resolved when the report runs, so a device
+# that you add to Zabbix with the right host groups joins a site / device-type scope by itself - there is nothing to edit here or in Grafana.
+#
+#   site          Zabbix host group "Site/<NAME>"        one name or a comma separated list     (empty = every site)
+#   device_group  Zabbix host group "Type/<NAME>"        device type, e.g. Router, Switch       (empty = every type)
+#   devices       Zabbix host names (visible name)       comma separated                        (empty = every device that matches the above)
+#   interfaces    interface names, e.g. Gi0/0            Interface report only                  (empty = every interface in interfaces.yaml)
+#   metrics       availability, cpu, memory              Network Health report only             (empty = all three)
+#
+# site, device_group and devices combine with AND. A scope that matches no device produces a NO DATA report that says so.
+# Effect per report:
+#   NetFlow          only flows exported by the matching devices (ExporterName = Zabbix host name)
+#   Interface        only the interfaces of interfaces.yaml that belong to the matching devices (and the listed interface names)
+#   Network Health   only the matching devices; the selected metrics
+# Names may not contain quotes, commas, backslashes or regular-expression characters (checked when the file is loaded).
+# "all" is built in (every device, every interface, every metric) and is used when nothing else is chosen.
+
+default_scope: all
+
+scopes:
+  - id: site-a
+    title: SITE-A (all devices)
+    site: SITE-A
+
+  - id: site-a-routers
+    title: SITE-A routers
+    site: SITE-A
+    device_group: Router
+
+  - id: wan-edge
+    title: WAN edge routers
+    devices: SITE-A, SITE-B
+    interfaces: Gi0/0
+    metrics: availability, cpu
+
+  - id: switches-availability
+    title: Switch availability
+    device_group: Switch
+    metrics: availability

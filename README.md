@@ -23,9 +23,13 @@ sudo bin/grafana-platform install   --env-file /root/grafana.env                
 
 Afterwards: `grafana-platform verify | status | backup | restore | upgrade | rollback | rotate-secrets` (see the guide).
 
-## Daily traffic reports
+## Universal selection and device health
 
-Two A4-landscape PDFs every morning (NetFlow, Interface traffic) built from **Grafana panels** and delivered by e-mail / Telegram: [docs/DAILY-REPORTS.md](docs/DAILY-REPORTS.md) (install, configuration, operation), [docs/reports/VALIDATION.md](docs/reports/VALIDATION.md) (evidence, sizing, limits, GO/NO-GO), [docs/reports/examples/](docs/reports/examples/README.md) (DEMO, PARTIAL and NO DATA examples).
+The NOC dashboards (Device Health, WAN Overview) and the five NetFlow dashboards share one set of native selectors — site, device type, device, interface, direction, metric — read from Zabbix, so a device added to Zabbix is selectable everywhere without a dashboard edit. Device Health distinguishes UP / DOWN / UNKNOWN / NO DATA / NOT MONITORED (a reachable device without CPU / memory data is not DOWN); NetFlow Platform Health no longer reports an outage for a no-traffic lab. Original UIDs, queries and panels are preserved. [docs/UNIVERSAL-SELECTION.md](docs/UNIVERSAL-SELECTION.md) (architecture, variables, discovery, limits), [docs/USER-GUIDE.md](docs/USER-GUIDE.md), [docs/VALIDATION-SELECTION.md](docs/VALIDATION-SELECTION.md) (evidence, GO/NO-GO), screenshots in [docs/screenshots/](docs/screenshots/).
+
+## Daily reports
+
+Three A4-landscape PDFs every morning (NetFlow, Interface traffic, Network Health) built from **Grafana panels**, narrowed by saved scopes (site / device type / devices / interfaces / metrics) and delivered by e-mail / Telegram: [docs/DAILY-REPORTS.md](docs/DAILY-REPORTS.md) (install, configuration, operation), [docs/reports/VALIDATION.md](docs/reports/VALIDATION.md) (evidence, sizing, limits, GO/NO-GO), [docs/reports/examples/](docs/reports/examples/README.md) (DEMO, PARTIAL and NO DATA examples).
 
 ## Repository map
 

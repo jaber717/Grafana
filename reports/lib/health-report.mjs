@@ -62,7 +62,8 @@ function summarizeDevice(d, data, win, scope) {
   const downFlags = [];
   for (let k = 0; k < n; k++) downFlags.push(grid.get(win.startMs + k * BUCKET_S * 1000) === false);
   const downMinutes = downFlags.filter(Boolean).length * (BUCKET_S / 60);
-  const coverage = n ? Math.min(1, basisT.length / n) : 0;
+  // coverage = share of 5-minute intervals with ANY availability sample (ICMP or SNMP, whatever its value)
+  const coverage = n ? Math.min(1, new Set([...ping, ...snmp].map((x) => x.t)).size / n) : 0;
   const cpu = scope.metrics.includes('cpu') ? metricOf(series.cpu?.[d.host], win) : null;
   const mem = scope.metrics.includes('memory') ? metricOf(series.mem?.[d.host], win) : null;
   return {

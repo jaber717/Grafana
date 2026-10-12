@@ -6,7 +6,7 @@
   "daily",
   "health",
   "zabbix",
-  "rev:c60d0d7e1ae6"
+  "rev:593413920405"
  ],
  "timezone": "Asia/Riyadh",
  "editable": true,
@@ -50,8 +50,8 @@
  "panels": [
   {
    "id": 1,
-   "title": "Availability timeline (ICMP, 5-minute intervals)",
-   "type": "state-timeline",
+   "title": "Availability timeline (ICMP, 30-minute cells)",
+   "type": "status-history",
    "gridPos": {
     "x": 0,
     "y": 0,
@@ -113,10 +113,10 @@
     "overrides": []
    },
    "options": {
-    "mergeValues": true,
     "showValue": "never",
-    "alignValue": "center",
     "rowHeight": 0.82,
+    "colWidth": 1,
+    "cellGap": 0,
     "legend": {
      "showLegend": false
     },
@@ -179,8 +179,8 @@
         ]
        },
        "params": [
-        "5m",
-        "avg"
+        "30m",
+        "min"
        ],
        "added": false
       }
@@ -208,7 +208,7 @@
   },
   {
    "id": 2,
-   "title": "Availability by device (% of intervals up)",
+   "title": "Availability by device (lowest 9)",
    "type": "bargauge",
    "gridPos": {
     "x": 0,
@@ -220,7 +220,7 @@
    "fieldConfig": {
     "defaults": {
      "unit": "percent",
-     "decimals": 2,
+     "decimals": 1,
      "min": 0,
      "max": 100,
      "noValue": "NO DATA",
@@ -249,7 +249,7 @@
    },
    "options": {
     "orientation": "horizontal",
-    "displayMode": "gradient",
+    "displayMode": "basic",
     "valueMode": "color",
     "namePlacement": "left",
     "showUnfilled": true,
@@ -257,7 +257,7 @@
     "minVizHeight": 14,
     "text": {
      "titleSize": 11,
-     "valueSize": 13
+     "valueSize": 11
     },
     "reduceOptions": {
      "values": true,
@@ -346,6 +346,23 @@
         100
        ],
        "added": false
+      },
+      {
+       "def": {
+        "name": "setAlias",
+        "category": "Alias",
+        "params": [
+         {
+          "name": "alias",
+          "type": "string"
+         }
+        ],
+        "defaultParams": []
+       },
+       "params": [
+        "$__zbx_host"
+       ],
+       "added": false
       }
      ],
      "options": {
@@ -376,8 +393,7 @@
       "reducers": [
        "mean"
       ],
-      "includeTimeField": false,
-      "labelsToFields": true
+      "includeTimeField": false
      }
     },
     {
@@ -394,7 +410,7 @@
     {
      "id": "limit",
      "options": {
-      "limitField": 12
+      "limitField": 9
      }
     }
    ]

@@ -200,7 +200,7 @@ async function main() {
       for (const s of sc.scopes.values()) console.log(`${s.id === sc.defaultId ? '*' : ' '} ${s.id.padEnd(20)} ${scopeLabel(s)}`);
       if (flags.resolve) {
         const { settings } = need();
-        const g = new Grafana({ url: settings.grafana.url, token: settings.grafana.token });
+        const gr = settings.grafana, g = new Grafana({ url: gr.url, token: gr.token });
         const r = await resolveRunScope({ g, settings, scopeId: scopeId || settings.scope, kinds: ['health'], log: () => {} });
         console.log(`
 scope ${r.scope.id}: ${r.devices.length} device(s)${r.devices.length ? ':' : ' - nothing matches'}`);
@@ -309,12 +309,13 @@ async function demo() {
     const hfx = healthFixture(win, { scenario });
     for (const d of [netflowDashboard({ demo: nf }), interfaceDashboard(cfg, { demo: ifx }), healthDashboard({ demo: hfx }, hfx.devices)]) await g.json('POST', '/api/dashboards/db', { dashboard: d, folderUid: FOLDER.uid, overwrite: true });
     const settings = { grafana: { url }, interfacesFile: null, outputDir: join(tmpdir(), `grafana-report-demo-${process.pid}`, scenario), stateDir: join(out, '.state'), chromiumCmd: chromium, kinds: ['netflow', 'interface', 'health'], retry: { attempts: 2, baseMs: 2000, maxMs: 5000 }, renderTimeoutS: 60, notifyOnFailure: false, retentionDays: 3650, email: { enabled: false }, telegram: { enabled: false } };
-    const r = await runDaily({ settings, now, date: date_, noDeliver: true, demo: { scenario, keepHtml: !!flags.previews }, deps: { grafana: g }, log: loggerFor(settings) });
+    const r = await runDaily({ settings, now, date: date_, noDeliver: true, demo: { scenario, keepHtml: !!(flags.previews || flags['keep-html']) }, deps: { grafana: g }, log: loggerFor(settings) });
     if (r.exitCode) { code = r.exitCode; continue; }
     const dest = scenario === 'normal' ? out : join(out, scenario);
     mkdirSync(dest, { recursive: true });
     for (const x of r.results) {
       copyFileSync(x.file.path, join(dest, x.file.filename));
+      if (flags['keep-html']) copyFileSync(`${x.file.path}.html`, join(dest, `${x.file.filename}.html`));   // previews can then be made on another machine (reports/lib/preview.mjs)
       console.log(`${scenario}: ${join(dest, x.file.filename)} (${x.model.status}, ${x.file.pages} pages)`);
       if (flags.previews) await previewPages(readFileSync(`${x.file.path}.html`, 'utf8'), join(out, 'previews', scenario), { chromium, pages: x.file.pages, prefix: x.file.filename.replace(/\.pdf$/, '') });
     }

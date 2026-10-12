@@ -30,5 +30,10 @@
 * Rotate: admin password (UI); `zabbix-password` / `clickhouse-password` — change the file, then run `grafana-platform rotate-secrets` (writes the new value into the datasource and verifies it); `secret-key` is **not** rotated casually: changing it makes every stored datasource password undecryptable (recover with `rotate-secrets`, which re-encrypts them with the new key).
 * The platform never creates accounts in Zabbix or ClickHouse and never uses LAB credentials.
 
+## Universal selection and daily reports (this branch)
+* Selection is **read-only**: dashboard variables read Zabbix host groups / hosts / items through the existing Zabbix datasource; nothing writes to Zabbix, ClickHouse or any device.
+* The report job needs only the Viewer token; scopes are resolved through Grafana's Zabbix API pass-through (`host.get`). Scope and host names are validated / escaped before use in SQL or regular expressions (see DAILY-REPORTS.md §9). Real e-mail / Telegram delivery stays **off** until enabled and approved.
+* The added `noc-inventory` datasource is Grafana's built-in TestData (no network, no credentials). Details: [UNIVERSAL-SELECTION.md](UNIVERSAL-SELECTION.md).
+
 ## Reporting
 Security issues in this repository: see [../SECURITY.md](../SECURITY.md).

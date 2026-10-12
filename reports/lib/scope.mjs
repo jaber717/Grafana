@@ -19,6 +19,8 @@ const list = (v) => (v == null ? [] : (Array.isArray(v) ? v : String(v).split(',
 // names end up inside SQL string literals and regular expressions: refuse anything that could break out of them
 const SAFE = /^[^'"\\`,;|()[\]{}^$*+?<>\r\n]+$/;
 
+export const isSafeName = (n) => SAFE.test(n);
+
 export function makeScope(raw, where = 'scope') {
   const id = String(raw.id ?? '');
   if (!ID.test(id)) throw new Error(`${where}: id '${id}' must be lowercase letters, digits, '-' or '_'`);

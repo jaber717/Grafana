@@ -1,13 +1,14 @@
-# Daily network traffic reports
+# Daily network reports
 
-Two professionally designed A4-landscape PDFs, produced every morning from **Grafana panels** and delivered by e-mail and (optionally) Telegram:
+Three professionally designed A4-landscape PDFs, produced every morning from **Grafana panels** and delivered by e-mail and (optionally) Telegram:
 
 | File | Source | What it answers |
 |---|---|---|
 | `Daily-NetFlow-YYYY-MM-DD.pdf` | Akvorado NetFlow in ClickHouse | How much traffic crossed the network edge yesterday, in which direction, who/what/where it came from, and how complete the data is |
 | `Daily-Interface-Traffic-YYYY-MM-DD.pdf` | Zabbix interface items | How busy each configured link was, how close to its capacity, and where data is missing |
+| `Daily-Network-Health-YYYY-MM-DD.pdf` | Zabbix availability, CPU and memory (the Device Health data) | Which devices were UP / DOWN / UNKNOWN / NO DATA / NOT MONITORED at the end of the day, availability and down time, CPU and memory peaks, what needs attention |
 
-The reporting window is always the **previous complete calendar day in Asia/Riyadh, 00:00–24:00**, printed on every page. Both reports are independent: a day without NetFlow still produces a complete Interface report, and vice versa. Layout, wording and the NO DATA / PARTIAL behaviour are shown in [`docs/reports/examples/`](reports/examples/README.md); evidence, sizing and limits are in [`docs/reports/VALIDATION.md`](reports/VALIDATION.md).
+The reporting window is always the **previous complete calendar day in Asia/Riyadh, 00:00–24:00**, printed on every page. The three reports are independent: a day without NetFlow still produces a complete Interface and Health report, and the Interface report never needs NetFlow. All three can be narrowed by a **saved scope** (§4a): site, device type, devices, interfaces, metrics. Layout, wording and the NO DATA / PARTIAL behaviour are shown in [`docs/reports/examples/`](reports/examples/README.md); evidence, sizing and limits are in [`docs/reports/VALIDATION.md`](reports/VALIDATION.md).
 
 ## 1. How it works
 
@@ -31,10 +32,12 @@ The reporting window is always the **previous complete calendar day in Asia/Riya
 
 ## 2. What the reports show
 
-### Page structure (both reports)
+### Page structure (all reports)
 1. **Executive Summary** — KPI cards, the main chart, key observations, collection/completeness.
 2. **Traffic Analysis** — NetFlow: hourly volume, report day vs previous day, protocol mix, traffic by site and by ISP. Interfaces: one Grafana panel per interface (1–2 interfaces get full-width panels, 3–4 a 2×2 grid, more a 2×3 grid per page).
-3. **Technical Details** — Top-10 tables, exporter / interface tables, missing-data indicators, data quality and methodology.
+3. **Technical Details** — Top-10 tables, exporter / interface / device tables, missing-data indicators, data quality and methodology.
+
+The **Network Health** report: page 1 = KPI cards (devices in scope, UP at end of day, DOWN / UNKNOWN, NO DATA / NOT MONITORED, average availability, highest CPU peak), devices requiring attention, the device status table and observations; page 2 = four Grafana panels (availability timeline, availability by device, CPU, memory); page 3+ = every device (state, availability, down time, coverage, CPU / memory average and peak) and the methodology. Device states use exactly the Device Health definition ([UNIVERSAL-SELECTION.md §3](UNIVERSAL-SELECTION.md)); a device that answers ping but has no CPU / memory item stays **UP** (N/A), silence at the end of the day is **NO DATA**, never DOWN, and a day without any availability data is a designed **NO DATA** page, never "all healthy".
 
 Every page carries the date, the period, the status badge (COMPLETE / PARTIAL / NO DATA), the data coverage and a footer with source and generation time.
 
@@ -103,7 +106,7 @@ Reference: [`config/reports/report.env.example`](../config/reports/report.env.ex
 sudo -u grafana-report /usr/local/sbin/grafana-report build-dashboards --apply --token-file /etc/grafana-platform/reports/editor.token
 sudo -u grafana-report /usr/local/sbin/grafana-report check-config
 ```
-`check-config` validates the settings, the interface list, Chromium, Grafana reachability and that **both dashboards are current** (see "Revision guard"). It prints `[ OK ] / [FAIL]` per check.
+`check-config` validates the settings, the interface list, the saved scopes, Chromium, Grafana reachability and that **the three dashboards are current** (see "Revision guard"). It prints `[ OK ] / [FAIL]` per check.
 
 ### Step 6 — generate by hand, then test delivery
 ```bash
@@ -129,7 +132,8 @@ sudo /usr/local/sbin/grafana-report schedule enable
 | Key | Meaning |
 |---|---|
 | `GRAFANA_URL`, `GRAFANA_TOKEN_FILE` | Grafana base URL and the Viewer token file |
-| `REPORT_KINDS` | `netflow,interface` (either or both) |
+| `REPORT_KINDS` | `netflow,interface,health` (any of them; default all three) |
+| `SCOPES_FILE`, `REPORT_SCOPE` | saved scopes file (§4a) and the scope used when `--scope` is not given (default `all`) |
 | `INTERFACES_FILE` | the YAML in §5 |
 | `CHROMIUM_CMD` | program + arguments (no shell); placeholders `{workdir}` `{uid}` `{gid}`; fully qualified image names only |
 | `OUTPUT_DIR`, `STATE_DIR`, `LOG_FILE`, `RETENTION_DAYS` | files, delivery ledger, JSON log, how long daily folders are kept (45) |
@@ -137,6 +141,22 @@ sudo /usr/local/sbin/grafana-report schedule enable
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURITY` (`none`/`starttls`/`tls`), `SMTP_USER`, `SMTP_PASSWORD_FILE`, `SMTP_TLS_CA_FILE` | credentials are refused over `none` |
 | `TELEGRAM_ENABLED`, `TELEGRAM_BOT_TOKEN_FILE`, `TELEGRAM_CHAT_ID`, `TELEGRAM_API_BASE` | the API base is configurable only for tests |
 | `RETRY_ATTEMPTS`, `RETRY_BASE_SECONDS`, `RETRY_MAX_SECONDS`, `NOTIFY_ON_FAILURE` | exponential backoff; one "generation failed" notice per day |
+
+### 4a. Saved scopes (`scopes.yaml`)
+A scope says *which part of the estate* a run covers — site, device type, devices, interfaces and metrics — and applies to all three reports. It is made of **names** (Zabbix host groups `Site/<NAME>` and `Type/<NAME>`, host names, interface names), never ids, and is resolved when the report runs from the Zabbix inventory (read-only, through Grafana's Zabbix datasource). A device added to Zabbix with the right host groups therefore joins a site / device-type scope **without any edit**.
+
+```yaml
+default_scope: all
+scopes:
+  - id: site-a-routers
+    title: SITE-A routers
+    site: SITE-A              # host group Site/SITE-A
+    device_group: Router      # host group Type/Router   (site AND device type AND devices)
+    metrics: availability, cpu    # Network Health report only
+```
+Full reference: [`config/reports/scopes.example.yaml`](../config/reports/scopes.example.yaml). Use it with `grafana-report run --scope site-a-routers` (or `REPORT_SCOPE=…`); `grafana-report scopes --resolve --scope ID` shows the devices a scope matches. NetFlow is limited to the matching exporters (`ExporterName` = Zabbix host name), the Interface report to the configured interfaces of the matching devices (a scope never *adds* interfaces — `include: true` in `interfaces.yaml` stays mandatory), the Health report to the matching devices and metrics. A scope that matches nothing yields a NO DATA report that says so. The scope is printed in the report (completeness table), the e-mail and the Telegram summary.
+
+Implementation: the dashboards are fixed; the job passes the scope as hidden dashboard variables when it renders (`exp_scope` exporters, `if_scope` interfaces, `hosts` devices), and the same scope drives the numbers, so a picture and its figures cannot disagree.
 
 ### `interfaces.yaml`
 No Zabbix item id appears anywhere; items are selected by **device (Zabbix host name) and item name**.
@@ -174,8 +194,10 @@ Only `item.get` is called with a **read-only** Zabbix API token. Copy the entrie
 
 | Command | Purpose |
 |---|---|
-| `grafana-report run` | what the timer runs: generate both reports, deliver to every enabled channel |
-| `grafana-report generate [--date D] [--kind netflow\|interface] [--keep-html]` | manual **Generate Report**; never sends |
+| `grafana-report run [--scope ID]` | what the timer runs: generate the reports of `REPORT_KINDS`, deliver to every enabled channel |
+| `grafana-report generate [--date D] [--kind netflow\|interface\|health] [--scope ID] [--keep-html]` | manual **Generate Report**; never sends |
+| `grafana-report scopes [--resolve] [--scope ID]` | list the saved scopes; `--resolve` shows the devices a scope matches (read-only) |
+| `grafana-report build-dashboards [--apply]` | the three report dashboards (re-run after an interface-list or release change) |
 | `grafana-report deliver [--date D] [--force]` | send already generated PDFs |
 | `grafana-report test-delivery [--email] [--telegram] [--to a@x,b@y]` | manual **Test Delivery** with clearly marked DEMO sample PDFs |
 | `grafana-report check-config` | pre-flight; also shows dashboard revisions |
@@ -195,9 +217,9 @@ Exit codes: `0` ok · `1` configuration error · `2` generation failed · `3` de
 `grafana-report.timer` fires at **07:00 Asia/Riyadh** (= 04:00 UTC, no DST) with `Persistent=true`: if the host was down at 07:00 the run happens at the next start (idempotent, so it cannot double-send). `grafana-report schedule set 07:30` writes a drop-in (`/etc/systemd/system/grafana-report.timer.d/schedule.conf`) after validating it with `systemd-analyze calendar`; the shipped unit is never edited. The timer is **disabled until you enable it**.
 
 ## 8. E-mail and Telegram
-**E-mail**: one message per day to the configured list (multiple recipients supported), HTML summary (status chips, headline figures, observations, attachment list) + plain-text alternative + the two PDFs. STARTTLS and implicit TLS verify the server certificate (`SMTP_TLS_CA_FILE` for a private CA); credentials are never sent over `none`; a certificate that does not verify aborts before any password is sent. Test with Mailpit or any SMTP test server: only `SMTP_HOST/PORT/SECURITY` change.
+**E-mail**: one message per day to the configured list (multiple recipients supported), HTML summary (status chips, headline figures, observations, attachment list, saved scope) + plain-text alternative + the three PDFs. STARTTLS and implicit TLS verify the server certificate (`SMTP_TLS_CA_FILE` for a private CA); credentials are never sent over `none`; a certificate that does not verify aborts before any password is sent. Test with Mailpit or any SMTP test server: only `SMTP_HOST/PORT/SECURITY` change.
 
-**Telegram**: create a bot with @BotFather, put its token in `TELEGRAM_BOT_TOKEN_FILE`, add the bot to the chat and set `TELEGRAM_CHAT_ID`. Per day: one summary message (HTML parse mode, ≤ 4096 chars) + one document per PDF. Rate limits (`429 retry_after`) are honoured; the bot token never appears in logs or errors.
+**Telegram**: create a bot with @BotFather, put its token in `TELEGRAM_BOT_TOKEN_FILE`, add the bot to the chat and set `TELEGRAM_CHAT_ID`. Per day: one summary message (HTML parse mode, ≤ 4096 chars) + one document per PDF (three). Rate limits (`429 retry_after`) are honoured; the bot token never appears in logs or errors.
 
 ## 9. Security
 * Least privilege: Viewer token for the job; Editor only for installing dashboards; read-only Zabbix token for discovery; no ClickHouse or Zabbix credential in the report tooling (Grafana owns them).
@@ -206,6 +228,8 @@ Exit codes: `0` ok · `1` configuration error · `2` generation failed · `3` de
 * The service unit uses `ProtectSystem=strict`, `ProtectHome`, `PrivateTmp`, `ProtectControlGroups`, `UMask=0027`. Seccomp-based directives (`ProtectKernel*`, `RestrictNamespaces`, `NoNewPrivileges`, …) are deliberately **not** used: they make systemd imply no-new-privileges, which breaks the setuid `newuidmap` rootless Podman needs (verified by bisection on RHEL 9.6). The container is Chromium's sandbox.
 * All message and report text is HTML-escaped; header injection in e-mail fields is rejected.
 * Nothing is sent to anyone not listed in `EMAIL_TO` / the configured Telegram chat; real delivery is **off** until enabled.
+* **Scopes read the Zabbix inventory through Grafana** (the datasource's API pass-through, `host.get` only) with the same Viewer token: no Zabbix credential is held by the report job. Names from `scopes.yaml` and from Zabbix are never concatenated blindly into queries: a name containing quotes, commas, backslashes or regular-expression characters is refused (scopes) or skipped and logged (Zabbix hosts), and host / interface lists are escaped before they reach a SQL literal or a regular expression.
+* The built-in TestData datasource `noc-inventory` used by the Device Health table is local (no network, no credentials).
 
 ## 10. Troubleshooting
 | Symptom | Cause / fix |

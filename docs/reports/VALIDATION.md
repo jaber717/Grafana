@@ -2,6 +2,8 @@
 
 Branch `feature/daily-reports` (from release v1.0.1, which is untouched). All validation ran **without touching LAB or production**: one isolated RHEL 9.6 test VM (SELinux enforcing, egress to private ranges blocked), a disposable Grafana 13.2.3 OSS container, an isolated ClickHouse and mock Zabbix / SMTP / Telegram services with dummy credentials. **No real recipient was contacted and no real credential was used.** The LAB has no traffic, as expected; every traffic figure below comes from synthetic datasets whose expected values were computed independently.
 
+> **Update:** the third report (Network Health), saved scopes and the universal dashboard selection were validated afterwards; evidence, defects, limits and the GO / NO-GO for that work are in [../VALIDATION-SELECTION.md](../VALIDATION-SELECTION.md). Everything below describes the NetFlow and Interface reports and still applies; tables that say "two reports" mean those two.
+
 ## 1. What was validated, and how
 
 | Area | Method | Result |

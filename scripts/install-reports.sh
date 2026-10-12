@@ -34,7 +34,7 @@ ln -sfn "$ROOT/bin/grafana-report" /usr/local/sbin/grafana-report
 say "/usr/local/sbin/grafana-report -> $ROOT/bin/grafana-report"
 
 echo "== configuration templates (existing files are never overwritten)"
-for f in report.env interfaces.yaml; do
+for f in report.env interfaces.yaml scopes.yaml; do
   src="$ROOT/config/reports/$f.example"; [ -f "$src" ] || src="$ROOT/config/reports/${f%.yaml}.example.yaml"
   if [ ! -e "$ETC/$f" ]; then install -m 0640 -o root -g grafana-report "$src" "$ETC/$f"; say "created $ETC/$f (edit it)"; else say "kept    $ETC/$f"; fi
 done

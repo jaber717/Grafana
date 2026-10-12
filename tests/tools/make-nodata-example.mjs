@@ -19,9 +19,11 @@ const date = process.argv[3] || '2026-10-11';
 const chromium = findLocalChromium() || (console.error('set CHROMIUM_BIN'), process.exit(1));
 const ifFile = join(ROOT, 'config', 'reports', 'interfaces.example.yaml');
 const cfg = loadInterfaceConfig(readFileSync(ifFile, 'utf8'));
-const g = await startGrafanaMock({ cfg, netflowRows: {}, ifaceSeries: {}, dashboards: { 'rpt-netflow-daily': { tags: [`rev:${liveRevision('netflow')}`] }, 'rpt-interface-daily': { tags: [`rev:${liveRevision('interface', cfg)}`] } } });
+// the Zabbix inventory lists the configured devices (host groups Site/<site>, Type/Router) but nothing reports: an empty health report
+const inventory = [...new Set(cfg.interfaces.map((i) => i.device))].map((h, i) => ({ hostid: String(i + 1), host: h, name: h, status: '0', hostgroups: [{ name: `Site/${cfg.interfaces.find((x) => x.device === h).site}` }, { name: 'Type/Router' }] }));
+const g = await startGrafanaMock({ cfg, inventory, health: { series: {} }, netflowRows: {}, ifaceSeries: {}, dashboards: { 'rpt-netflow-daily': { tags: [`rev:${liveRevision('netflow')}`] }, 'rpt-interface-daily': { tags: [`rev:${liveRevision('interface', cfg)}`] }, 'rpt-health-daily': { tags: [`rev:${liveRevision('health')}`] } } });
 const work = join(tmpdir(), `nodata-example-${process.pid}`);
-const settings = { grafana: { url: g.url, token: g.token }, interfacesFile: ifFile, outputDir: work, stateDir: join(work, 'state'), chromiumCmd: chromium, kinds: ['netflow', 'interface'], retry: { attempts: 1, baseMs: 1, maxMs: 1 }, renderTimeoutS: 30, notifyOnFailure: false, retentionDays: 3650, email: { enabled: false }, telegram: { enabled: false } };
+const settings = { grafana: { url: g.url, token: g.token }, interfacesFile: ifFile, outputDir: work, stateDir: join(work, 'state'), chromiumCmd: chromium, kinds: ['netflow', 'interface', 'health'], retry: { attempts: 1, baseMs: 1, maxMs: 1 }, renderTimeoutS: 30, notifyOnFailure: false, retentionDays: 3650, email: { enabled: false }, telegram: { enabled: false } };
 const [y, m, d] = date.split('-').map(Number);
 const r = await runDaily({ settings, now: Date.UTC(y, m - 1, d + 1, 4, 0), noDeliver: true, keepHtml: true, deps: { sleep: async () => {} }, log: () => {} });
 await g.close();

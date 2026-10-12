@@ -12,7 +12,7 @@ node tools/netflow/test-queries.mjs --quiet   # run every NetFlow panel query th
 ## Change a dashboard
 
 1. Edit in the Grafana UI **or** in Git. If you edit in the UI, capture it: `node tools/export-live.mjs` (read-only against Grafana, rewrites the files), `node tools/inventory.mjs`, review the diff.
-2. NetFlow dashboards are generated: edit `tools/netflow/generate.mjs`, run `node tools/netflow/generate.mjs` from the repository root (writes `dashboards/netflow/`), then the capture/apply flow.
+2. The NetFlow and the two NOC dashboards are generated: edit `tools/netflow/generate.mjs` (NetFlow) or `tools/monitoring/*.mjs` (Device Health, WAN; the frozen v1.0.1 inputs are in `tools/monitoring/base/`), run `node tools/netflow/generate.mjs` / `node tools/monitoring/build.mjs` from the repository root (they write `dashboards/netflow/` and `dashboards/noc/`), then the capture/apply flow. Drift tests fail if the committed JSON and the generator disagree. Selector model and variable names: [UNIVERSAL-SELECTION.md](UNIVERSAL-SELECTION.md).
 3. `scripts/release-gate.sh` → `scripts/apply.sh --dry-run` → `scripts/apply.sh` → `scripts/verify.sh` → commit, bump `VERSION`/`CHANGELOG.md`, tag.
 
 ## Backup

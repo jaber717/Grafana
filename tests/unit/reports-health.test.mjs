@@ -162,3 +162,12 @@ test('netflow queries: the exporter scope is a placeholder everywhere; dashboard
   assert.match(bind(NETFLOW_QUERIES.totals.sql, win, { exporters: [] }), /AND 0/, 'a scope that matches no device returns nothing');
   assert.match(bind(NETFLOW_QUERIES.trend.sql, null, { macro: true, variable: true }), /\$\{exp_scope\}/);
 });
+
+test('scope devices with unsafe names are skipped, never interpolated into queries', async () => {
+  const { resolveRunScope } = await import('../../reports/lib/generate.mjs');
+  const events = [];
+  const inv = [{ host: "ok-1", sites: [], types: [] }, { host: "bad'name", sites: [], types: [] }, { host: 'a,b', sites: [], types: [] }, { host: 'r1.example', sites: [], types: [] }];
+  const r = await resolveRunScope({ g: null, settings: { scopesFile: null, retry: { attempts: 1, baseMs: 1, maxMs: 1 } }, scopeId: null, kinds: ['health'], log: (e) => events.push(e), deps: { inventory: async () => inv } });
+  assert.deepEqual(r.devices.map((d) => d.host), ['ok-1', 'r1.example']);
+  assert.deepEqual(events.filter((e) => e.event === 'device-skipped').map((e) => e.host), ['a,b', "bad'name"]);
+});

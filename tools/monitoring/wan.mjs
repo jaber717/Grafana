@@ -75,7 +75,7 @@ function charts() {
       description: 'Mean / peak / last value of each metric per interface for the time range; the interface speed (capacity) is its own row, so traffic can be compared with it.',
       targets: [zq('A', IF('Bits (received|sent)')), zq('B', IF('Speed'))],
       transformations: [nice, { id: 'reduce', options: { mode: 'seriesToRows', reducers: ['mean', 'max', 'lastNotNull'], labelsToFields: false } }, { id: 'organize', options: { renameByName: { Field: 'Interface · metric', Mean: 'Mean', Max: 'Peak', 'Last *': 'Last' } } }],
-      fieldConfig: { defaults: { unit: 'bps', decimals: 1, noValue: '—', custom: { align: 'left', cellOptions: { type: 'auto' } } }, overrides: [{ matcher: { id: 'byName', options: 'Interface · metric' }, properties: [prop('unit', 'string')] }] },
+      fieldConfig: { defaults: { unit: 'bps', decimals: 1, noValue: '—', custom: { align: 'left', cellOptions: { type: 'auto' } } }, overrides: [{ matcher: { id: 'byName', options: 'Interface · metric' }, properties: [prop('unit', 'string'), prop('custom.width', 270)] }] },
       options: { showHeader: true, cellHeight: 'sm' } },
     { id: IDS.explorer, type: 'timeseries', title: 'Selected metric — ${metric:text}', gridPos: { x: 0, y: 14, w: 24, h: 9 }, datasource: DS.zabbix,
       description: 'Pick one or more metrics with the Metric selector. Operational status: up = green, down = red.',

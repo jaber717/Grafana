@@ -885,6 +885,10 @@
               {
                 "id": "unit",
                 "value": "string"
+              },
+              {
+                "id": "custom.width",
+                "value": 270
               }
             ]
           }

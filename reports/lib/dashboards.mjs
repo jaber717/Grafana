@@ -161,25 +161,29 @@ const healthTarget = (item, refId, fns = []) => ({
   options: { showDisabledItems: false, skipEmptyValues: false, disableDataAlignment: false, useZabbixValueMapping: false }, table: { skipEmptyValues: false }, trigger: { filter: '' }, tags: { filter: '' }, proxy: { filter: '' },
 });
 const scaleFn = (n) => ({ def: { name: 'scale', category: 'Transform', params: [{ name: 'factor', type: 'float' }], defaultParams: [100] }, params: [n], added: false });
+const aliasFn = (a) => ({ def: { name: 'setAlias', category: 'Alias', params: [{ name: 'alias', type: 'string' }], defaultParams: [] }, params: [a], added: false });
 const HOSTNAME = '${__field.labels.host}';
 
 // devices = the DEMO devices (only used to build the TestData targets); live dashboards do not depend on the device list
+// the timeline draws one cell per 30 minutes (the minimum of its 5-minute buckets, like the live groupBy('30m','min'))
+const downsampleMin = (a, n) => (n <= 1 ? a : Array.from({ length: Math.ceil(a.length / n) }, (_, i) => Math.min(...a.slice(i * n, i * n + n))));
 export function healthDashboard(source = 'live', devices = []) {
   const demo = source !== 'live' ? source.demo : null;
-  const demoSeries_ = (key, scale = 1) => devices.map((d, i) => ({ datasource: DS_DEMO, scenarioId: 'csv_metric_values', alias: d.host, refId: String.fromCharCode(65 + i), stringInput: [...(demo.byHost[d.host]?.[key] || []).map((v) => (v == null ? 'null' : Math.round(v * scale * 100) / 100)), 'null'].join(',') }));
+  // like the live queries, a device without samples draws no series
+  const demoSeries_ = (key, scale = 1, minOf = 1) => devices.filter((d) => (demo.byHost[d.host]?.[key] || []).length).map((d, i) => ({ datasource: DS_DEMO, scenarioId: 'csv_metric_values', alias: d.host, refId: String.fromCharCode(65 + i), stringInput: [...downsampleMin(demo.byHost[d.host]?.[key] || [], minOf).map((v) => (v == null ? 'null' : Math.round(v * scale * 100) / 100)), 'null'].join(',') }));
   const tsFc = (max) => { const fc = baseTs('percent', { fillOpacity: 6 }); fc.defaults.max = max; fc.defaults.decimals = 0; fc.defaults.color = { mode: 'palette-classic' }; if (!demo) fc.defaults.displayName = HOSTNAME; return fc; };
   const timelineFc = { defaults: { noValue: 'NO DATA', color: { mode: 'thresholds' }, thresholds: { mode: 'absolute', steps: [{ color: PALETTE.crit, value: null }, { color: PALETTE.ok, value: 0.5 }] },
     mappings: [{ type: 'range', options: { from: 0.5, to: 1, result: { color: PALETTE.ok, text: 'UP', index: 0 } } }, { type: 'range', options: { from: 0, to: 0.4999, result: { color: PALETTE.crit, text: 'DOWN', index: 1 } } }],
     custom: { fillOpacity: 90, lineWidth: 0 } }, overrides: [] };
   if (!demo) timelineFc.defaults.displayName = HOSTNAME;
-  const barFc = { defaults: { unit: 'percent', decimals: 2, min: 0, max: 100, noValue: 'NO DATA', color: { mode: 'thresholds' }, thresholds: { mode: 'absolute', steps: [{ color: PALETTE.crit, value: null }, { color: PALETTE.warn, value: 99 }, { color: PALETTE.ok, value: 99.9 }] } }, overrides: [] };
+  const barFc = { defaults: { unit: 'percent', decimals: 1, min: 0, max: 100, noValue: 'NO DATA', color: { mode: 'thresholds' }, thresholds: { mode: 'absolute', steps: [{ color: PALETTE.crit, value: null }, { color: PALETTE.warn, value: 99 }, { color: PALETTE.ok, value: 99.9 }] } }, overrides: [] };
   const panels = [
-    panel(1, 'Availability timeline (ICMP, 5-minute intervals)', 'state-timeline', 24, 8, 0, timelineFc, { mergeValues: true, showValue: 'never', alignValue: 'center', rowHeight: 0.82, legend: { showLegend: false }, tooltip: { mode: 'single' } },
-      demo ? demoSeries_('ping') : [healthTarget('/^ICMP ping$/', 'A')]),
-    panel(2, 'Availability by device (% of intervals up)', 'bargauge', 8, 9, 8, barFc,
-      { orientation: 'horizontal', displayMode: 'gradient', valueMode: 'color', namePlacement: 'left', showUnfilled: true, sizing: 'auto', minVizHeight: 14, text: { titleSize: 11, valueSize: 13 }, reduceOptions: { values: true, calcs: [], fields: '/^Mean$/' }, legend: { showLegend: false } },
-      demo ? demoSeries_('ping', 100) : [healthTarget('/^ICMP ping$/', 'A', [scaleFn(100)])],
-      { transformations: [{ id: 'reduce', options: { mode: 'seriesToRows', reducers: ['mean'], includeTimeField: false, labelsToFields: !demo } }, { id: 'sortBy', options: { fields: {}, sort: [{ field: 'Mean' }] } }, { id: 'limit', options: { limitField: 12 } }] }),
+    panel(1, 'Availability timeline (ICMP, 30-minute cells)', 'status-history', 24, 8, 0, timelineFc, { showValue: 'never', rowHeight: 0.82, colWidth: 1, cellGap: 0, legend: { showLegend: false }, tooltip: { mode: 'single' } },
+      demo ? demoSeries_('ping', 1, 6) : [(() => { const t = healthTarget('/^ICMP ping$/', 'A'); t.functions[0].params = ['30m', 'min']; return t; })()]),
+    panel(2, 'Availability by device (lowest 9)', 'bargauge', 8, 9, 8, barFc,
+      { orientation: 'horizontal', displayMode: 'basic', valueMode: 'color', namePlacement: 'left', showUnfilled: true, sizing: 'auto', minVizHeight: 14, text: { titleSize: 11, valueSize: 11 }, reduceOptions: { values: true, calcs: [], fields: '/^Mean$/' }, legend: { showLegend: false } },
+      demo ? demoSeries_('ping', 100) : [healthTarget('/^ICMP ping$/', 'A', [scaleFn(100), aliasFn('$__zbx_host')])],
+      { transformations: [{ id: 'reduce', options: { mode: 'seriesToRows', reducers: ['mean'], includeTimeField: false } }, { id: 'sortBy', options: { fields: {}, sort: [{ field: 'Mean' }] } }, { id: 'limit', options: { limitField: 9 } }] }),
     panel(3, 'CPU utilisation (5-minute average)', 'timeseries', 8, 9, 8, tsFc(100), tsOptions(true), demo ? demoSeries_('cpu') : [healthTarget('/CPU utilization/', 'A')]),
     panel(4, 'Memory utilisation (5-minute average)', 'timeseries', 8, 9, 8, tsFc(100), tsOptions(true), demo ? demoSeries_('mem') : [healthTarget('/Memory utilization/', 'A')]),
   ];

@@ -38,7 +38,7 @@ export function buildHealthHtml(model, images = {}) {
 const devCols = (m) => [
   { key: 'host', label: 'Device' }, { key: 'site', label: 'Site' }, { key: 'type', label: 'Type' },
   { label: 'State at end of day', fmt: (d) => pill(d.state) }, { label: 'Availability', align: 'r', fmt: (d) => esc(pct(d.availability, 2)) },
-  { label: 'Down time', align: 'r', fmt: (d) => esc(d.hasData ? `${d.downMinutes} min` : 'N/A') }, { label: 'Coverage', align: 'r', fmt: (d) => esc(d.hasData ? pct(d.coverage * 100) : 'N/A') },
+  { label: 'Down time', align: 'r', fmt: (d) => esc(d.availability == null ? 'N/A' : `${d.downMinutes} min`) }, { label: 'Coverage', align: 'r', fmt: (d) => esc(d.hasData ? pct(d.coverage * 100) : 'N/A') },
   ...(m.scope.metrics.includes('cpu') ? [{ label: 'CPU avg', align: 'r', fmt: (d) => esc(metric(d.cpu, 'avg')) }, { label: 'CPU peak', align: 'r', fmt: (d) => esc(metric(d.cpu, 'peak')) }] : []),
   ...(m.scope.metrics.includes('memory') ? [{ label: 'Memory avg', align: 'r', fmt: (d) => esc(metric(d.mem, 'avg')) }, { label: 'Memory peak', align: 'r', fmt: (d) => esc(metric(d.mem, 'peak')) }] : []),
 ];
@@ -52,14 +52,20 @@ function fullHtml(m, im) {
 ${kpi({ cls: 'neutral', label: 'Devices in scope', value: String(k.devices), sub: esc(m.scope.title) })}
 ${kpi({ cls: k.up === k.devices ? 'ok' : 'neutral', label: 'UP at end of day', value: String(k.up), sub: `${k.devices ? Math.round((100 * k.up) / k.devices) : 0}% of devices` })}
 ${kpi({ cls: k.down ? 'crit' : notUp ? 'warn' : 'ok', label: 'DOWN / UNKNOWN', value: `${k.down} / ${k.unknown}`, sub: k.down ? esc(m.devices.filter((d) => d.state === 'DOWN').map((d) => d.host).slice(0, 3).join(', ')) : 'none down' })}
-${kpi({ cls: k.noData + k.notMonitored ? 'nodata' : 'ok', label: 'NO DATA / NOT MONITORED', value: `${k.noData} / ${k.notMonitored}`, sub: 'not the same as down' })}
+${kpi({ cls: k.noData + k.notMonitored ? 'neutral' : 'ok', label: 'NO DATA / NOT MONITORED', value: `${k.noData} / ${k.notMonitored}`, sub: 'not the same as down' })}
 ${kpi({ cls: availCls(k.avgAvailability), label: 'Average availability', value: k.avgAvailability == null ? 'N/A' : fmtPct(k.avgAvailability, 2), sub: `${k.withOutage} device${k.withOutage === 1 ? '' : 's'} with down time` })}
 ${kpi({ cls: k.peakCpu?.value >= 90 ? 'warn' : 'in', label: 'Highest CPU peak', value: k.peakCpu ? pct(k.peakCpu.value) : 'N/A', sub: k.peakCpu ? `${esc(k.peakCpu.host)} at ${esc(fmtClock(k.peakCpu.at))}` : m.scope.metrics.includes('cpu') ? 'no CPU data' : 'CPU not in scope' })}
 </div>`;
-  const att = m.attention.slice(0, 7);
-  const attTable = `<div class="sec" style="flex:1 1 auto;min-width:0"><h3>Devices requiring attention</h3>${att.length ? table([
+  const att = m.attention.slice(0, 5);
+  const attTable = `<div class="sec" style="min-width:0"><h3>Devices requiring attention</h3>${att.length ? table([
     { key: 'host', label: 'Device' }, { label: 'State', fmt: (a) => pill(a.state) }, { label: 'Why', fmt: (a) => esc(a.reasons.join('; ')) },
-  ], att) : `<div class="note" style="padding:2mm 0">No device needs attention: every device in scope was UP at the end of the day with no down time and no load alert.</div>`}${m.attention.length > 7 ? emptyRow(`+ ${m.attention.length - 7} more: see Technical Details`) : ''}</div>`;
+  ], att) : `<div class="note" style="padding:2mm 0">No device needs attention: every device in scope was UP at the end of the day with no down time and no load alert.</div>`}${m.attention.length > 5 ? emptyRow(`+ ${m.attention.length - 5} more: see Technical Details`) : ''}</div>`;
+  const RANK = { DOWN: 0, UNKNOWN: 1, NO_DATA: 2, NOT_MONITORED: 3, UP: 4 };
+  const overview = [...list].sort((a, b) => RANK[a.state] - RANK[b.state] || a.host.localeCompare(b.host, undefined, { numeric: true })).slice(0, 10);
+  const devTable = `<div class="sec" style="min-width:0"><h3>Device status at end of day</h3>${table([
+    { key: 'host', label: 'Device' }, { key: 'site', label: 'Site' }, { label: 'State', fmt: (d) => pill(d.state) }, { label: 'Availability', align: 'r', fmt: (d) => esc(pct(d.availability, 2)) },
+    ...(m.scope.metrics.includes('cpu') ? [{ label: 'CPU peak', align: 'r', fmt: (d) => esc(metric(d.cpu, 'peak')) }] : []), ...(m.scope.metrics.includes('memory') ? [{ label: 'Memory peak', align: 'r', fmt: (d) => esc(metric(d.mem, 'peak')) }] : []),
+  ], overview)}${list.length > overview.length ? emptyRow(`+ ${list.length - overview.length} more devices: see Technical Details`) : ''}</div>`;
   const side = `<div style="display:flex;flex-direction:column;gap:4.5mm;width:88.5mm;min-height:0">
 <div class="sec" style="flex:1 1 auto"><h3>Key observations</h3><ul class="obs">${m.observations.map((o) => `<li>${esc(o)}</li>`).join('')}</ul></div>
 <div class="sec"><h3>Scope &amp; completeness</h3><table class="t"><tbody>
@@ -67,7 +73,7 @@ ${kpi({ cls: k.peakCpu?.value >= 90 ? 'warn' : 'in', label: 'Highest CPU peak', 
 <tr><td>Status</td><td class="r">${st(m.status)}</td></tr>
 <tr><td>Devices reporting</td><td class="r">${reporting} / ${list.length}</td></tr>
 <tr><td>Metrics</td><td class="r">${esc(m.scope.metrics.join(', '))}</td></tr></tbody></table></div></div>`;
-  const p1 = page({ n: 1, total: 0, kicker: 'NOC · Network health', title: 'Daily Network Health Report', model: m, left: FOOT, extra, body: `${kp}<div style="display:flex;gap:4.5mm;min-height:0">${attTable}${side}</div>` });
+  const p1 = page({ n: 1, total: 0, kicker: 'NOC · Network health', title: 'Daily Network Health Report', model: m, left: FOOT, extra, body: `${kp}<div style="display:flex;gap:4.5mm;min-height:0"><div style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:4.5mm">${attTable}${devTable}</div>${side}</div>` });
 
   const wantCpu = m.scope.metrics.includes('cpu'), wantMem = m.scope.metrics.includes('memory');
   const row = `<div style="display:flex;gap:4.5mm">${card(im.avail, 88.5, 76, 'Availability by device')}${wantCpu ? card(im.cpu, 88.5, 76, 'CPU utilisation') : noteCard('CPU utilisation', 'CPU is not part of the saved scope for this report.', 88.5, 76)}${wantMem ? card(im.mem, 88.5, 76, 'Memory utilisation') : noteCard('Memory utilisation', 'Memory is not part of the saved scope for this report.', 88.5, 76)}</div>`;

@@ -9,7 +9,7 @@ import { buildNetflowModel } from './netflow-report.mjs';
 import { buildInterfaceModel } from './interface-report.mjs';
 import { buildHealthModel } from './health-report.mjs';
 import { buildHealthHtml, HEALTH_SLOTS, HEALTH_FILE } from './health-html.mjs';
-import { loadScopes, pickScope, isAllScope, needsInventory, resolveDevices, scopeInterfaces, scopeLabel, hostRegex } from './scope.mjs';
+import { loadScopes, pickScope, isAllScope, needsInventory, resolveDevices, scopeInterfaces, scopeLabel, hostRegex, isSafeName } from './scope.mjs';
 import { fetchInventory } from './inventory.mjs';
 import { buildNetflowHtml, NETFLOW_SLOTS, NETFLOW_FILE, mmToPx } from './netflow-html.mjs';
 import { buildInterfaceHtml, slotFor, UTIL_SLOT, INTERFACE_FILE } from './interface-html.mjs';
@@ -187,7 +187,10 @@ export async function resolveRunScope({ g, settings, scopeId, kinds, log = () =>
   let devices = [];
   if (needInv) {
     const inv = await retrying(() => (deps.inventory ? deps.inventory() : fetchInventory(g)), { ...settings.retry, sleep: deps.sleep, log, what: 'inventory' });
-    devices = resolveDevices(scope, inv);
+    // host names end up in SQL literals, URLs and regular expressions: a name with quotes / commas / regex characters is skipped (and logged), never interpolated
+    const found = resolveDevices(scope, inv);
+    for (const d of found.filter((x) => !isSafeName(x.host))) log({ event: 'device-skipped', host: d.host, reason: 'name contains characters that cannot be used safely in report queries' });
+    devices = found.filter((x) => isSafeName(x.host));
     log({ event: 'scope-resolved', scope: scope.id, devices: devices.length });
   }
   const cfgFull = kinds.includes('interface') ? loadInterfaceConfig(readFileSync(settings.interfacesFile, 'utf8')) : null;

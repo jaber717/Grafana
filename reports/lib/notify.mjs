@@ -86,7 +86,7 @@ export function emailHtml({ date, models, files, demo, grafanaUrl }) {
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#EEF1F5"><tr><td align="center" style="padding:24px 12px">
 <table role="presentation" width="640" cellspacing="0" cellpadding="0" style="width:640px;max-width:100%;background:#fff;border:1px solid #E1E5EA;border-radius:8px;overflow:hidden">
 <tr><td style="background:#14283D;padding:22px 28px">
-  <div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#A9BDD3">NOC · Network traffic</div>
+  <div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#A9BDD3">NOC · Network monitoring</div>
   <div style="font-size:21px;font-weight:600;color:#fff;margin-top:4px">Daily Network Reports</div>
   <div style="font-size:13px;color:#C9D6E5;margin-top:4px">${esc(fmtLongDate(date))} · 00:00 - 24:00 Asia/Riyadh (UTC+03:00)</div>${scopeLines(models).map((l) => `<div style="font-size:12px;color:#A9BDD3;margin-top:3px">${esc(l)}</div>`).join('')}</td></tr>
 ${demo ? `<tr><td style="background:#FFF4DC;color:#7A4B00;padding:8px 28px;font-size:12px;font-weight:600">${esc(DEMO_LABEL)} - this is a delivery test, not an operational report</td></tr>` : ''}
