@@ -6,7 +6,7 @@
   "daily",
   "health",
   "zabbix",
-  "rev:593413920405"
+  "rev:4bea1346f397"
  ],
  "timezone": "Asia/Riyadh",
  "editable": true,
@@ -146,7 +146,7 @@
       "filter": ""
      },
      "item": {
-      "filter": "/^ICMP ping$/"
+      "filter": "/^(ICMP ping|Zabbix agent ping)$/"
      },
      "functions": [
       {
@@ -290,7 +290,7 @@
       "filter": ""
      },
      "item": {
-      "filter": "/^ICMP ping$/"
+      "filter": "/^(ICMP ping|Zabbix agent ping)$/"
      },
      "functions": [
       {

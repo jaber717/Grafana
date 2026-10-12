@@ -67,7 +67,7 @@ export async function fetchInterfaceSeries(g, cfg, win) {
 // Returns the shapes buildHealthModel expects: series per host (5-minute buckets), the last 10 minutes of the window (state at the end of the
 // day) and the hosts that reported availability at all in the 8 days up to the end of the window (separates NO DATA from NOT MONITORED).
 const FRESH_MS = 10 * 60e3, LOOKBACK_MS = 8 * 86400e3;
-const ITEM = { ping: '/^ICMP ping$/', snmp: '/^SNMP agent availability$/', cpu: '/CPU utilization/', mem: '/Memory utilization/' };
+const ITEM = { ping: '/^(ICMP ping|Zabbix agent ping)$/', snmp: '/^SNMP agent availability$/', cpu: '/CPU utilization/', mem: '/Memory utilization/' };
 
 function hostOf(frame) {
   const fld = frame.schema.fields[1] || {};

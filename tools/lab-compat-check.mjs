@@ -2,30 +2,51 @@
 // Calls only hostgroup.get / host.get / item.get (a read-only API token is enough). Writes nothing anywhere; prints a report.
 //   ZABBIX_URL=https://zabbix/api_jsonrpc.php ZABBIX_TOKEN_FILE=/path/token  node tools/lab-compat-check.mjs [--exporters file] [--json]
 //   --exporters FILE   one ExporterName per line (from ClickHouse:  SELECT DISTINCT ExporterName FROM default.flows_1h0m0s WHERE TimeReceived > now() - INTERVAL 30 DAY)
-// ZABBIX_INSECURE_TLS=1 accepts a self-signed certificate (the LAB's; the Grafana datasource does the same with tlsSkipVerify).
 import { readFileSync } from 'node:fs';
-import { zabbixCaller } from '../reports/lib/discover.mjs';
+import https from 'node:https';
 
 const arg = (k) => { const i = process.argv.indexOf(`--${k}`); return i > 0 ? process.argv[i + 1] : null; };
-const url = process.env.ZABBIX_URL, tf = process.env.ZABBIX_TOKEN_FILE;
-if (!url || !tf) { console.error('set ZABBIX_URL and ZABBIX_TOKEN_FILE (read-only token)'); process.exit(1); }
-if (process.env.ZABBIX_INSECURE_TLS === '1') process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-const call = zabbixCaller({ url, token: readFileSync(tf, 'utf8').trim() });
+// credentials: ZABBIX_ENV_FILE (KEY=VALUE file with ZABBIX_API_URL / ZABBIX_API_TOKEN, kept outside Git) or ZABBIX_URL + ZABBIX_TOKEN_FILE. Never printed.
+// TLS is always verified: ZABBIX_CA_FILE = the LAB's (self-signed / private) certificate chain in PEM.
+const envf = {};
+if (process.env.ZABBIX_ENV_FILE) for (const l of readFileSync(process.env.ZABBIX_ENV_FILE, "utf8").split(/\r?\n/)) { const m = l.match(/^\s*([A-Z_]+)=(.*)$/); if (m) envf[m[1]] = m[2].trim(); }
+const url = envf.ZABBIX_API_URL || process.env.ZABBIX_URL;
+const token = envf.ZABBIX_API_TOKEN || (process.env.ZABBIX_TOKEN_FILE ? readFileSync(process.env.ZABBIX_TOKEN_FILE, 'utf8').trim() : null);
+if (!url || !token) { console.error('set ZABBIX_ENV_FILE, or ZABBIX_URL and ZABBIX_TOKEN_FILE (read-only token)'); process.exit(1); }
+const ca = process.env.ZABBIX_CA_FILE ? readFileSync(process.env.ZABBIX_CA_FILE) : undefined;
+let seq = 0;
+const call = (method, params) => new Promise((resolve, reject) => {
+  const u = new URL(url);
+  const body = JSON.stringify({ jsonrpc: '2.0', method, params, id: ++seq });
+  const r = https.request({ method: 'POST', hostname: u.hostname, port: u.port, path: u.pathname, ca, timeout: 60000, headers: { 'Content-Type': 'application/json-rpc', Authorization: `Bearer ${token}`, 'Content-Length': Buffer.byteLength(body) } }, (res) => {
+    let t = ''; res.on('data', (d) => (t += d));
+    res.on('end', () => { try { const j = JSON.parse(t); j.error ? reject(new Error(`${method}: ${j.error.message} ${j.error.data || ''}`)) : resolve(j.result); } catch (e) { reject(e); } });
+  });
+  r.on('error', reject); r.write(body); r.end();
+});
 
 // what the dashboards / reports look for (same patterns as tools/monitoring and reports/lib)
-const WANT = { ping: /^ICMP ping$/, snmp: /^SNMP agent availability$/, cpu: /CPU utilization/, mem: /Memory utilization/ };
+const WANT = { ping: /^(ICMP ping|Zabbix agent ping)$/, snmp: /^SNMP agent availability$/, cpu: /CPU utilization/, mem: /Memory utilization/ };
 const LOOKS = { cpu: /cpu|processor|处理器/i, mem: /mem|ram/i };
 const IFACE = /^Interface (.+?)\((.*)\): Bits (received|sent)$/;
 const IFACE_LIKE = /bits (received|sent)|ifhc(in|out)octets|net\.if\.(in|out)\[/i;
 
 const [groups, hosts] = await Promise.all([
   call('hostgroup.get', { output: ['groupid', 'name'] }),
-  call('host.get', { output: ['hostid', 'host', 'name', 'status'], selectHostGroups: ['name'], selectInterfaces: ['type', 'ip'] }),
+  call('host.get', { output: ['hostid', 'host', 'name', 'status'], selectHostGroups: ['name'], selectInterfaces: ['type', 'ip'], selectTags: ['tag', 'value'], selectInventory: ['location', 'type', 'vendor', 'model'] }),
 ]);
-const items = await call('item.get', { output: ['itemid', 'hostid', 'name', 'key_', 'status', 'units'], hostids: hosts.map((h) => h.hostid), filter: { status: 0 } });
+const items = await call('item.get', { output: ['itemid', 'hostid', 'name', 'key_', 'status', 'units', 'lastvalue'], hostids: hosts.map((h) => h.hostid), ...(process.argv.includes("--include-disabled") ? {} : { filter: { status: 0 } }) });
 const byHost = new Map(hosts.map((h) => [h.hostid, { h, items: [] }]));
 for (const it of items) byHost.get(it.hostid)?.items.push(it);
 
+// --dump TEXT: list every item (name, key, enabled, last value) of the hosts whose name contains TEXT
+if (process.argv.includes("--dump")) {
+  for (const { h, items: its } of byHost.values()) if (h.name.toLowerCase().includes((arg("dump") || "").toLowerCase())) {
+    console.log("== " + h.name + " [" + h.host + "] groups: " + (h.hostgroups || []).map((g) => g.name).join(", "));
+    for (const i of its) console.log("  " + i.name + "  [" + i.key_ + "]");
+  }
+  process.exit(0);
+}
 const out = { groups: groups.map((g) => g.name).sort(), hosts: [], findings: [] };
 const find = (sev, msg) => out.findings.push({ sev, msg });
 const monitored = hosts.filter((h) => String(h.status) === '0');
@@ -44,16 +65,17 @@ for (const { h, items: its } of byHost.values()) {
     ifStatus: its.filter((i) => /^Interface .*: Operational status$/.test(i.name)).length,
     ifErr: its.filter((i) => /^Interface .*: (Inbound|Outbound) packets (with errors|discarded)$/.test(i.name)).length,
     ifSpeed: its.filter((i) => /^Interface .*: Speed$/.test(i.name)).length,
-    interfaceTypes: [...new Set((h.interfaces || []).map((i) => ({ 1: 'agent', 2: 'snmp', 3: 'ipmi', 4: 'jmx' }[i.type] || i.type)))],
+    descr: ((its.find((i) => i.key_ === 'system.descr') || {}).lastvalue || '').slice(0, 70), tags: (h.tags || []).map((t) => t.tag + '=' + t.value), inventory: Object.entries(h.inventory && !Array.isArray(h.inventory) ? h.inventory : {}).filter(([, v]) => v).map(([k, v]) => k + '=' + v), interfaceTypes: [...new Set((h.interfaces || []).map((i) => ({ 1: 'agent', 2: 'snmp', 3: 'ipmi', 4: 'jmx' }[i.type] || i.type)))],
   };
   out.hosts.push(row);
   if (!row.enabled) continue;
   if (!row.sites.length) find('warn', `${row.host}: no Site/<NAME> host group - appears only under Site = All`);
   if (!row.types.length) find('warn', `${row.host}: no Type/<NAME> host group - appears only under Device type = All`);
-  if (!row.ping && !row.snmp) find('warn', `${row.host}: neither 'ICMP ping' nor 'SNMP agent availability' - shows NOT MONITORED`);
+  if (!row.ping && !row.snmp) find('warn', `${row.host}: neither 'ICMP ping' / 'Zabbix agent ping' nor 'SNMP agent availability' - shows NOT MONITORED`);
   if (!row.cpu.length) find(row.cpuCandidates.length ? 'gap' : 'info', `${row.host}: no item matching /CPU utilization/${row.cpuCandidates.length ? `; possible CPU items: ${row.cpuCandidates.join(' | ')}` : ' (no CPU item at all)'}`);
   if (!row.mem.length) find(row.memCandidates.length ? 'gap' : 'info', `${row.host}: no item matching /Memory utilization/${row.memCandidates.length ? `; possible memory items: ${row.memCandidates.join(' | ')}` : ' (no memory item at all)'}`);
-  if (row.ifaceLike.length) find('gap', `${row.host}: traffic items not named "Interface X(desc): Bits received/sent": ${row.ifaceLike.join(' | ')}`);
+  if (/huawei|vrp/i.test(row.descr) && (!row.cpu.length || !row.mem.length)) find('gap', `${row.host}: Huawei device without matching CPU/Memory items (cpu: ${row.cpu.length}, memory: ${row.mem.length}); candidates: ${[...row.cpuCandidates, ...row.memCandidates].join(' | ') || 'none'}`);
+  if (row.ifaceLike.length) find(row.ifaces > 0 || !row.snmp ? 'info' : 'gap', `${row.host}: traffic items not named "Interface X(desc): Bits received/sent": ${row.ifaceLike.join(' | ')}`);
 }
 // duplicate visible names break the name-based filters
 const dup = Object.entries(monitored.reduce((m, h) => ((m[h.name] = (m[h.name] || 0) + 1), m), {})).filter(([, n]) => n > 1);

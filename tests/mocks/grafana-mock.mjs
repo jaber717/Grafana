@@ -53,7 +53,7 @@ export function startGrafanaMock(opts = {}) {
             if (opts.failQuery === t.refId) { results[t.refId] = { error: 'Code: 60. DB::Exception: Table default.flows does not exist' }; continue; }
             results[t.refId] = { frames: [frameOfRows(opts.netflowRows?.[t.refId] || [])] };
           } else if (t.datasource?.type === 'alexanderzobnin-zabbix-datasource') {
-            const hk = { '/^ICMP ping$/': 'ping', '/^SNMP agent availability$/': 'snmp', '/CPU utilization/': 'cpu', '/Memory utilization/': 'mem' }[t.item?.filter];
+            const hk = { '/^(ICMP ping|Zabbix agent ping)$/': 'ping', '/^SNMP agent availability$/': 'snmp', '/CPU utilization/': 'cpu', '/Memory utilization/': 'mem' }[t.item?.filter];
             if (hk && opts.health) {
               const from = Number(q.from), to = Number(q.to);
               const frames = Object.entries(opts.health.series[hk] || {}).filter(([h]) => (t.host?.filter || '').includes(h)).map(([h, ser]) => {

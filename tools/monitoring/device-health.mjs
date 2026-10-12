@@ -24,7 +24,7 @@ const zq = (refId, item, aliasName, fns = []) => ({
 });
 
 const gb = (interval, agg) => ({ def: { name: 'groupBy', category: 'Transform', params: [{ name: 'interval', type: 'string' }, { name: 'function', options: ['avg', 'min', 'max', 'sum', 'count', 'median', 'first', 'last'], type: 'string' }], defaultParams: ['1m', 'avg'] }, params: [interval, agg], added: false });
-const PING = '/^ICMP ping$/', SNMP = '/^SNMP agent availability$/', CPU = '/CPU utilization/', MEM = '/Memory utilization/';
+const PING = '/^(ICMP ping|Zabbix agent ping)$/', SNMP = '/^SNMP agent availability$/', CPU = '/CPU utilization/', MEM = '/Memory utilization/';
 const pct = (extra = {}) => ({ unit: 'percent', decimals: 0, min: 0, max: 100, noValue: '—', thresholds: { mode: 'absolute', steps: [{ color: COLORS.up, value: null }, { color: COLORS.unknown, value: 70 }, { color: COLORS.down, value: 90 }] }, ...extra });
 const colour = (c, text, index) => ({ color: c, text, index });
 const byName = (name, props) => ({ matcher: { id: 'byName', options: name }, properties: props });
@@ -147,7 +147,7 @@ function explorer(y) {
     targets: [{ ...zq('A', '/$metric/', null), item: { filter: '/$metric/' } }],
     fieldConfig: { defaults: { displayName: '${__field.labels.host} · ${__field.labels.item}', unit: 'percent', min: 0, max: 100, noValue: 'NO DATA for the selected devices and metric',
       custom: { drawStyle: 'line', lineWidth: 1.5, fillOpacity: 0, showPoints: 'never', spanNulls: false, axisBorderShow: false } },
-    overrides: [{ matcher: { id: 'byRegexp', options: '.*ICMP ping.*' }, properties: [prop('unit', 'none'), prop('max', 1), prop('custom.lineInterpolation', 'stepAfter'), prop('custom.axisPlacement', 'right'), prop('custom.axisLabel', 'Availability (1 = UP)'),
+    overrides: [{ matcher: { id: 'byRegexp', options: '.*(ICMP|agent) ping.*' }, properties: [prop('unit', 'none'), prop('max', 1), prop('custom.lineInterpolation', 'stepAfter'), prop('custom.axisPlacement', 'right'), prop('custom.axisLabel', 'Availability (1 = UP)'),
       prop('mappings', [{ type: 'value', options: { 1: colour(COLORS.up, 'UP', 0), 0: colour(COLORS.down, 'DOWN', 1) } }])] }] },
     options: { legend: { displayMode: 'table', placement: 'bottom', showLegend: true, calcs: ['lastNotNull', 'mean', 'max'] }, tooltip: { mode: 'multi', sort: 'desc' } },
   };
@@ -157,7 +157,7 @@ function explorer(y) {
 export function buildDeviceHealth(base) {
   const legacy = base.panels.map((p) => ({ ...p, gridPos: { ...p.gridPos, y: 31 + p.gridPos.y } }));
   const metric = customVar('metric', 'Metric', 'CPU, Memory and/or Availability for the metric explorer. Only metrics that are monitored on the selected devices return data.',
-    [['CPU', 'CPU utilization'], ['Memory', 'Memory utilization'], ['Availability (ICMP)', 'ICMP ping']], { multi: true, current: [{ text: 'CPU', value: 'CPU utilization' }] });
+    [['CPU', 'CPU utilization'], ['Memory', 'Memory utilization'], ['Availability (ICMP)', 'ICMP ping'], ['Availability (Zabbix agent)', 'Zabbix agent ping']], { multi: true, current: [{ text: 'CPU', value: 'CPU utilization' }] });
   const panels = [
     ...kpiPanels(0), statusTable(4), timeline(4), attentionTable(14), explorer(20),
     { id: IDS.legacyRow, type: 'row', title: 'Original router wall (fixed set of routers, not filtered by the selectors)', collapsed: true, gridPos: { x: 0, y: 30, w: 24, h: 1 }, panels: legacy },

@@ -1015,7 +1015,7 @@
             "filter": ""
           },
           "item": {
-            "filter": "/^ICMP ping$/"
+            "filter": "/^(ICMP ping|Zabbix agent ping)$/"
           },
           "functions": [
             {
@@ -1629,7 +1629,7 @@
           {
             "matcher": {
               "id": "byRegexp",
-              "options": ".*ICMP ping.*"
+              "options": ".*(ICMP|agent) ping.*"
             },
             "properties": [
               {
@@ -5285,7 +5285,7 @@
                 "filter": ""
               },
               "item": {
-                "filter": "/^ICMP ping$/"
+                "filter": "/^(ICMP ping|Zabbix agent ping)$/"
               },
               "functions": [
                 {
@@ -5582,7 +5582,7 @@
                 "filter": ""
               },
               "item": {
-                "filter": "/^ICMP ping$/"
+                "filter": "/^(ICMP ping|Zabbix agent ping)$/"
               },
               "functions": [
                 {
@@ -5884,7 +5884,7 @@
         "name": "metric",
         "label": "Metric",
         "description": "CPU, Memory and/or Availability for the metric explorer. Only metrics that are monitored on the selected devices return data.",
-        "query": "CPU : CPU utilization, Memory : Memory utilization, Availability (ICMP) : ICMP ping",
+        "query": "CPU : CPU utilization, Memory : Memory utilization, Availability (ICMP) : ICMP ping, Availability (Zabbix agent) : Zabbix agent ping",
         "multi": true,
         "includeAll": false,
         "current": {
@@ -5909,6 +5909,11 @@
           {
             "text": "Availability (ICMP)",
             "value": "ICMP ping",
+            "selected": false
+          },
+          {
+            "text": "Availability (Zabbix agent)",
+            "value": "Zabbix agent ping",
             "selected": false
           }
         ],
