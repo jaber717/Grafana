@@ -2,9 +2,10 @@
 # Builds the OFFLINE bundle of the pinned Grafana Image Renderer container image (it also provides the Chromium used for PDF printing).
 #   tools/build-renderer-bundle.sh [output-dir]       (needs podman or docker, and Internet access, on the build machine)
 # The image is pinned by DIGEST in config/reports/renderer.env.example; the pulled image is verified against it before it is saved.
-# Result: <output-dir>/grafana-image-renderer-<tag>.tar.gz  (+ .sha256).  On the isolated host (rootless images and root images are SEPARATE stores):
-#   gunzip -c grafana-image-renderer-*.tar.gz | sudo podman load                                   # for grafana-image-renderer.service (renderer host)
-#   gunzip -c grafana-image-renderer-*.tar.gz | sudo -u grafana-report -H env XDG_RUNTIME_DIR=/run/grafana-report podman load   # for the PDF step
+# Result: <output-dir>/grafana-image-renderer-<tag>.tar.gz  (+ .sha256).  On the isolated host (rootless and root images are SEPARATE stores)
+# load it for each user that runs containers; the loader verifies the image ID and tags it localhost/grafana-image-renderer:pinned:
+#   sudo /usr/local/sbin/grafana-report load-image grafana-image-renderer-*.tar.gz --as-user grafana-report    # the PDF step
+#   sudo /usr/local/sbin/grafana-report load-image grafana-image-renderer-*.tar.gz                             # root store: grafana-image-renderer.service
 set -euo pipefail
 cd "$(dirname "$0")/.."
 OUT=${1:-dist}
@@ -23,5 +24,7 @@ NAME=grafana-image-renderer-$(echo "$DIGEST" | cut -c8-19)
 echo "== saving"
 "$ENGINE" save "$IMAGE" | gzip -9 > "$OUT/$NAME.tar.gz"
 ( cd "$OUT" && sha256sum "$NAME.tar.gz" > "$NAME.tar.gz.sha256" )
-{ echo "grafana-image-renderer offline bundle"; echo "image: $IMAGE"; echo "built: $(date -u +%FT%TZ)"; echo "engine: $("$ENGINE" --version)"; } > "$OUT/$NAME.MANIFEST.txt"
+ID=$("$ENGINE" image inspect --format '{{.Id}}' "$IMAGE"); WANT=$(sed -n 's/^RENDERER_IMAGE_ID=//p' config/reports/renderer.env.example)
+[ -z "$WANT" ] || [ "$ID" = "$WANT" ] || { echo "ERROR: image ID $ID differs from RENDERER_IMAGE_ID $WANT in config/reports/renderer.env.example" >&2; exit 1; }
+{ echo "grafana-image-renderer offline bundle"; echo "image: $IMAGE"; echo "image-id: $ID"; echo "built: $(date -u +%FT%TZ)"; echo "engine: $("$ENGINE" --version)"; } > "$OUT/$NAME.MANIFEST.txt"
 echo "built: $OUT/$NAME.tar.gz ($(du -h "$OUT/$NAME.tar.gz" | cut -f1))"; cat "$OUT/$NAME.tar.gz.sha256"

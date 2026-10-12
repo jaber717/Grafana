@@ -8,6 +8,7 @@
 //   check-config      validate settings, interface list, Chromium, Grafana access and dashboard revisions
 //   build-dashboards  generate the two report dashboards from the interface list; --apply installs them in "NOC / Daily Reports"
 //   discover          READ-ONLY: propose interface candidates from Zabbix (all include: false) or check an existing mapping (--compare)
+//   load-image        offline import of the pinned renderer image (verifies its ID, tags localhost/grafana-image-renderer:pinned)
 //   schedule          show | set HH:MM | enable | disable the daily timer (systemd drop-in; default 07:00 Asia/Riyadh, disabled until enabled)
 //   status            show the last run and delivery ledger of a day
 //   demo              build DEMO example reports against a DISPOSABLE Grafana with the TestData datasource (never operational data)
@@ -188,6 +189,28 @@ async function main() {
       console.log(existsSync(sp) ? readFileSync(sp, 'utf8') : `no run summary for ${win.date}`);
       const ld = join(settings.stateDir, 'ledger');
       if (existsSync(ld)) for (const f of readdirSync(ld).filter((x) => x.startsWith(win.date) && x.endsWith('.json'))) { const l = JSON.parse(readFileSync(join(ld, f), 'utf8')); console.log(`${f}: ${l.status || 'in progress'}, delivered ${l.delivered.length}, attempts ${l.history.length}`); }
+      return 0;
+    }
+    case 'load-image': {
+      // grafana-report load-image FILE.tar.gz [--as-user USER]: offline import of the renderer image. The ID is verified against the one this
+      // release expects (config/reports/renderer.env.example), then the image is tagged localhost/grafana-image-renderer:pinned.
+      const file = argv.find((a) => !a.startsWith('--') && a !== flags['as-user']);
+      if (!file || !existsSync(file)) fail('usage: grafana-report load-image FILE.tar.gz [--as-user USER]');
+      const want = (readFileSync(join(ROOT, 'config', 'reports', 'renderer.env.example'), 'utf8').match(/^RENDERER_IMAGE_ID=(\S+)/m) || [])[1];
+      const asUser = flags['as-user'] && flags['as-user'] !== true ? flags['as-user'] : null;
+      const env = asUser ? ['env', 'HOME=/var/lib/grafana-report/home', 'XDG_RUNTIME_DIR=/run/grafana-report'] : [];
+      const pre = asUser ? ['sudo', '-u', asUser, ...env] : [];
+      const sh = (args, input) => spawnSync(args[0], args.slice(1), { input, encoding: 'utf8', maxBuffer: 1 << 30, cwd: '/' });
+      const unz = spawnSync('gunzip', ['-c', file], { maxBuffer: 3 << 30 });
+      if (unz.status !== 0) fail(`cannot read ${file}: ${unz.stderr}`);
+      const load = spawnSync(pre[0] || 'podman', [...pre.slice(1), ...(pre.length ? ['podman'] : []), 'load'], { input: unz.stdout, encoding: 'utf8', maxBuffer: 1 << 26, cwd: '/' });
+      if (load.status !== 0) fail(`podman load failed: ${load.stderr}`);
+      const id = (`${load.stdout}\n${load.stderr}`.match(/sha256:([0-9a-f]{64})/) || [])[1];
+      if (!id) fail('could not read the loaded image ID from podman');
+      if (want && id !== want.replace(/^sha256:/, '')) fail(`loaded image ID ${id} is not the expected ${want}: refusing to tag it`);
+      const tag = sh([...pre, ...(pre.length ? [] : []), 'podman', 'tag', id, 'localhost/grafana-image-renderer:pinned']);
+      if (tag.status !== 0) fail(`podman tag failed: ${tag.stderr}`);
+      console.log(`loaded and verified image ${id}\ntagged localhost/grafana-image-renderer:pinned${asUser ? ` for ${asUser}` : ''}\nUse it in CHROMIUM_CMD / RENDERER_IMAGE on this host instead of the registry reference.`);
       return 0;
     }
     case 'schedule': {
