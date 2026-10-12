@@ -42,7 +42,8 @@ for (const dir of readdirSync("dashboards")) {
 }
 for (const p of pls) for (const it of p.items) if (it.type === "dashboard_by_uid" && !uids.has(it.value)) fail("playlist " + p.name + " references missing dashboard " + it.value);
 const types = new Set(ds.map((d) => d.type));
-for (const t of types) { const base = t.replace(/-datasource$/, ""); if (!plugins.some((p) => p === t || p.startsWith(base))) fail("datasource type " + t + " has no matching plugin in plugins/plugins.txt"); }
+const bundled = new Set(["grafana-testdata-datasource"]);   // ships inside Grafana itself (local data frames, no network): no plugin pin needed
+for (const t of types) { if (bundled.has(t)) continue; const base = t.replace(/-datasource$/, ""); if (!plugins.some((p) => p === t || p.startsWith(base))) fail("datasource type " + t + " has no matching plugin in plugins/plugins.txt"); }
 console.log(bad ? "" : "[PASS] " + uids.size + " dashboards, " + ds.length + " datasources, " + pls.length + " playlist(s) consistent");
 process.exit(bad ? 1 : 0);' || FAIL=$((FAIL+1))
 else skip "content consistency (node missing)"; fi

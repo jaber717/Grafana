@@ -35,5 +35,15 @@
       "trends": true,
       "username": "grafana-ro"
     }
+  },
+  {
+    "uid": "noc-inventory",
+    "name": "NOC Inventory (local)",
+    "type": "grafana-testdata-datasource",
+    "access": "proxy",
+    "url": "",
+    "isDefault": false,
+    "basicAuth": false,
+    "jsonData": {}
   }
 ]

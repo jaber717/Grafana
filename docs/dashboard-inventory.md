@@ -9,7 +9,7 @@
 | netflow | `netflow-health` | NetFlow | Platform Health | 11 | 1 | 30s | now-24h to now | NetFlow ClickHouse |
 | netflow | `netflow-overview` | NetFlow | NOC Overview | 16 | 7 | 30s | now-6h to now | NetFlow ClickHouse |
 | netflow | `netflow-top-talkers` | NetFlow | Top Talkers | 13 | 9 | 1m | now-1h to now | NetFlow ClickHouse |
-| noc | `noc-device-health` | NOC — Device Health | 10 | 0 | 30s | now-1h to now | Zabbix LAB |
+| noc | `noc-device-health` | NOC — Device Health | 23 | 5 | 30s | now-6h to now | Zabbix LAB, NOC Inventory (local) |
 | noc | `noc-wan-overview` | NOC — WAN Overview | 6 | 0 | 30s | now-1h to now | Zabbix LAB |
 
 ## NetFlow | ASN & Internet (`netflow-asn`, folder netflow)
@@ -120,10 +120,22 @@ Tags: netflow, netops. Variables: `scope`, `exporter`, `iface`, `direction`, `pr
 
 NOC Device Health. Row 1: 7 tall device cards + Last update tile, each 3 cols wide and 8 rows tall for readable values. Each device card is a vertical stat panel with 4 reduced sub-metrics (PING / SNMP / MEM / CPU), colored by state. Row 2: Memory and CPU timeseries side-by-side, each 11 rows tall, legends renamed to device names via byFrameRefID displayName overrides. No expression-chained tiles — those were replaced by compact per-device cards which already answer 'who is unhealthy' at a glance. All itemids live-validated via /api/ds/query (28/28).
 
-Tags: netops, device-health. Variables: -.
+Unified scope (Site / Device type / Device / Metric): the section above the collapsed row follows the selectors; the collapsed row keeps the original fixed router wall unchanged.
+
+Tags: netops, device-health. Variables: `site`, `device_group`, `site_hosts`, `device`, `metric`.
 
 | Panel | Type |
 |---|---|
+| Devices in scope | stat |
+| UP | stat |
+| DOWN | stat |
+| UNKNOWN | stat |
+| NO DATA | stat |
+| NOT MONITORED | stat |
+| Device status | table |
+| Availability timeline (ICMP) | state-timeline |
+| Devices requiring attention | table |
+| Metric explorer - ${metric} | timeseries |
 | STC | stat |
 | MOBILY | stat |
 | SAIX-A | stat |
@@ -134,6 +146,9 @@ Tags: netops, device-health. Variables: -.
 | Last update | stat |
 | Memory utilization | timeseries |
 | CPU utilization | timeseries |
+| Devices in the selected scope | table |
+| Latest values (last 10m) | table |
+| Availability data seen (last 8d) | table |
 
 ## NOC — WAN Overview (`noc-wan-overview`, folder noc)
 
