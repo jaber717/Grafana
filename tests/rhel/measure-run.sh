@@ -11,7 +11,7 @@ rm -f "$OUT.stats" "$OUT.time"
     sudo docker stats --no-stream --format '{{.Name}}={{.MemUsage}}/{{.CPUPerc}}' renderer grafana ch 2>/dev/null | tr '\n' ' ' >> "$OUT.stats"
     # rootless podman (the PDF step) is invisible to docker stats: sample its processes instead
     printf 'podman_rss_kb=%s\n' "$(ps -eo rss,comm | awk '/chrom|crun|conmon/ {s+=$1} END {print s+0}')" >> "$OUT.stats"
-    sleep 2
+    sleep 1
   done ) &
 SAMPLER=$!
 START=$(date +%s%N)

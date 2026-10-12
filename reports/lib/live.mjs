@@ -4,10 +4,24 @@ import { NETFLOW_QUERIES, bind } from './queries.mjs';
 import { DS_CH, DS_ZBX, zbxTarget } from './dashboards.mjs';
 
 // ---- NetFlow ----------------------------------------------------------------------------------------------------------------------
+// The four per-IP / per-service tables read the RAW flow table (a full day of records) and can exceed the datasource query timeout on a busy
+// network. They are OPTIONAL: when one fails with a query error the report is still produced, that table says it is unavailable and why
+// (rows._failed), and the observations say so. A network/Grafana error (transient) still aborts and is retried by the caller.
+export const OPTIONAL_QUERIES = ['top_src', 'top_dst', 'top_conv', 'top_ports'];
+const chQuery = (id, win) => ({ refId: id, datasource: DS_CH, editorType: 'sql', format: 0, rawSql: bind(NETFLOW_QUERIES[id].sql, win, { macro: true }) });
+
 export async function fetchNetflowRows(g, win) {
-  const queries = Object.entries(NETFLOW_QUERIES).map(([id, q]) => ({ refId: id, datasource: DS_CH, editorType: 'sql', format: 0, rawSql: bind(q.sql, win, { macro: true }) }));
-  const rows = await g.query(queries, { fromMs: win.startMs, toMs: win.endMs });
+  const span = { fromMs: win.startMs, toMs: win.endMs };
+  const rows = await g.query(Object.keys(NETFLOW_QUERIES).filter((id) => !OPTIONAL_QUERIES.includes(id)).map((id) => chQuery(id, win)), span);
+  const failed = {};
+  for (const id of OPTIONAL_QUERIES) {
+    try { Object.assign(rows, await g.query([chQuery(id, win)], span)); } catch (e) {
+      if (e.transient) throw e;
+      failed[id] = String(e.message).replace(/^query w+: /, '').slice(0, 160);
+    }
+  }
   for (const id of Object.keys(NETFLOW_QUERIES)) if (!rows[id]) rows[id] = [];
+  rows._failed = failed;
   return rows;
 }
 

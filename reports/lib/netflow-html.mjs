@@ -67,12 +67,12 @@ ${kpi({ cls: m.status === 'COMPLETE' ? 'ok' : 'warn', label: 'Data coverage', va
   const vol = (r) => esc(fmtBytes(r.Bytes));
   const T = m.tables;
   const raw = T.rawExpired ? emptyRow('Raw flow records are kept for 14 days; this day is older, so per-IP tables are not available.') : null;
-  const topTable = (title, rows, cols) => `<div class="sec"><h3>${esc(title)}</h3>${raw || (rows.length ? table(cols, rows, { index: true }) : emptyRow('No data'))}</div>`;
+  const topTable = (title, rows, cols, id) => `<div class="sec"><h3>${esc(title)}</h3>${raw || (T.unavailable?.[id] ? emptyRow(`Not available: the query on the raw flow table failed (${T.unavailable[id].slice(0, 80)}).`) : rows.length ? table(cols, rows, { index: true }) : emptyRow('No data'))}</div>`;
   const ip = (key) => ({ key, label: 'IP address' });
-  const t1 = topTable('Top 10 source IPs', T.top_src, [ip('IP'), { key: 'Network', label: 'Network' }, { label: 'Volume', align: 'r', fmt: vol }, { label: 'Share', align: 'r', fmt: share }]);
-  const t2 = topTable('Top 10 destination IPs', T.top_dst, [ip('IP'), { key: 'Network', label: 'Network' }, { label: 'Volume', align: 'r', fmt: vol }, { label: 'Share', align: 'r', fmt: share }]);
-  const t3 = topTable('Top 10 conversations', T.top_conv, [{ label: 'Source → destination', fmt: (r) => `${esc(r.Source)} → ${esc(r.Destination)}` }, { key: 'Service', label: 'Service' }, { label: 'Volume', align: 'r', fmt: vol }]);
-  const t4 = topTable('Top 10 protocols / ports', T.top_ports, [{ key: 'Service', label: 'Protocol / port' }, { label: 'Volume', align: 'r', fmt: vol }, { label: 'Share', align: 'r', fmt: share }]);
+  const t1 = topTable('Top 10 source IPs', T.top_src, [ip('IP'), { key: 'Network', label: 'Network' }, { label: 'Volume', align: 'r', fmt: vol }, { label: 'Share', align: 'r', fmt: share }], 'top_src');
+  const t2 = topTable('Top 10 destination IPs', T.top_dst, [ip('IP'), { key: 'Network', label: 'Network' }, { label: 'Volume', align: 'r', fmt: vol }, { label: 'Share', align: 'r', fmt: share }], 'top_dst');
+  const t3 = topTable('Top 10 conversations', T.top_conv, [{ label: 'Source → destination', fmt: (r) => `${esc(r.Source)} → ${esc(r.Destination)}` }, { key: 'Service', label: 'Service' }, { label: 'Volume', align: 'r', fmt: vol }], 'top_conv');
+  const t4 = topTable('Top 10 protocols / ports', T.top_ports, [{ key: 'Service', label: 'Protocol / port' }, { label: 'Volume', align: 'r', fmt: vol }, { label: 'Share', align: 'r', fmt: share }], 'top_ports');
   const exp = `<div class="sec"><h3>Exporters (each listed separately - not additive)</h3>${T.exporters.length ? table([
     { key: 'Exporter', label: 'Exporter' }, { key: 'Site', label: 'Site', fmt: (r) => esc(r.Site || '-') },
     { label: 'Inbound', align: 'r', fmt: (r) => esc(fmtBytes(r.InboundBytes)) }, { label: 'Outbound', align: 'r', fmt: (r) => esc(fmtBytes(r.OutboundBytes)) },

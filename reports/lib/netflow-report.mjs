@@ -59,7 +59,9 @@ export function buildNetflowModel({ win, rows, nowMs = Date.now(), demo = false 
   const withShare = (list, total) => list.map((r) => ({ ...r, Bytes: num(r.Bytes), Share: share(num(r.Bytes), total) }));
   const edgeBytes = inB + outB;
   model.tables.rawExpired = rawExpired;
-  for (const k of ['top_src', 'top_dst', 'top_conv', 'top_ports']) model.tables[k] = rawExpired ? [] : withShare(rows[k] || [], edgeBytes);
+  const failed = rows._failed || {};
+  model.tables.unavailable = failed;
+  for (const k of ['top_src', 'top_dst', 'top_conv', 'top_ports']) model.tables[k] = rawExpired || failed[k] ? [] : withShare(rows[k] || [], edgeBytes);
   model.tables.protocols = withShare(rows.protocols || [], topTotal(rows.protocols || []));
   model.tables.exporters = (rows.exporters || []).map((e) => ({
     ...e, InboundBytes: num(e.InboundBytes), OutboundBytes: num(e.OutboundBytes), Coverage: Math.min(1, num(e.Buckets) / expectedBuckets(win.seconds)),
@@ -79,6 +81,7 @@ export function buildNetflowModel({ win, rows, nowMs = Date.now(), demo = false 
   if (ts) model.observations.push(`Largest source: ${ts.IP} with ${fmtPct(ts.Share)} of inbound plus outbound volume.`);
   if (status === 'PARTIAL') model.observations.push(`Data coverage is ${fmtPct(cov.coverage * 100, 0)} (${cov.observed} of ${cov.expected} five-minute intervals): the volumes above understate real traffic.`);
   if (k.sampled) model.observations.push(`Volumes are estimates: exporters sample 1 in ${num(t.MaxSamplingRate)} packets and each record is scaled by its sampling rate.`);
+  if (Object.keys(failed).length) model.observations.push(`${Object.keys(failed).length} of the Top-10 tables are not available: their queries on the raw flow table failed (see the report log). All other figures are unaffected.`);
   if (rawExpired) model.notes.push(`Per-IP tables are not available: raw flow records are kept ${RAW_RETENTION_DAYS} days and this day is older.`);
   return model;
 }

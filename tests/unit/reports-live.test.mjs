@@ -6,6 +6,7 @@ import { fetchNetflowRows, fetchInterfaceSeries } from '../../reports/lib/live.m
 import { windowForDate } from '../../reports/lib/window.mjs';
 import { netflowFixture, interfaceFixture, demoInterfaceConfig } from '../../reports/lib/demo-data.mjs';
 import { buildNetflowModel } from '../../reports/lib/netflow-report.mjs';
+import { buildNetflowHtml } from '../../reports/lib/netflow-html.mjs';
 import { buildInterfaceModel } from '../../reports/lib/interface-report.mjs';
 import { NETFLOW_QUERIES } from '../../reports/lib/queries.mjs';
 
@@ -17,11 +18,12 @@ test('netflow live: every report query is sent to the ClickHouse datasource with
   const mock = await startGrafanaMock({ netflowRows: rows });
   const g = new Grafana({ url: mock.url, token: mock.token });
   const got = await fetchNetflowRows(g, win);
-  assert.deepEqual(Object.keys(got).sort(), Object.keys(NETFLOW_QUERIES).sort());
-  const sent = mock.stats.queryBodies[0];
-  assert.equal(sent.from, String(win.startMs));
-  assert.equal(sent.to, String(win.endMs));
-  assert.ok(sent.queries.every((q) => q.rawSql.includes('$__fromTime') && q.rawSql.includes('$__toTime') || q.refId === 'newest_flow'));
+  assert.deepEqual(Object.keys(got).filter((k) => k !== '_failed').sort(), Object.keys(NETFLOW_QUERIES).sort());
+  assert.deepEqual(got._failed, {});
+  const sentQueries = mock.stats.queryBodies.flatMap((b) => b.queries);
+  assert.deepEqual(sentQueries.map((q) => q.refId).sort(), Object.keys(NETFLOW_QUERIES).sort(), 'every report query is sent exactly once');
+  for (const b of mock.stats.queryBodies) { assert.equal(b.from, String(win.startMs)); assert.equal(b.to, String(win.endMs)); }
+  assert.ok(sentQueries.every((q) => q.rawSql.includes('$__fromTime') && q.rawSql.includes('$__toTime') || q.refId === 'newest_flow'));
   const m = buildNetflowModel({ win, rows: got, nowMs: now, demo: true });
   const direct = buildNetflowModel({ win, rows, nowMs: now, demo: true });
   assert.equal(m.kpis.inboundBytes, direct.kpis.inboundBytes, 'live path and fixture path agree');
@@ -29,10 +31,36 @@ test('netflow live: every report query is sent to the ClickHouse datasource with
   await mock.close();
 });
 
-test('netflow live: a failing query aborts - never a silent empty table', async () => {
+test('netflow live: a failing REQUIRED query aborts the run - never a silent empty section', async () => {
+  const mock = await startGrafanaMock({ netflowRows: netflowFixture(win), failQuery: 'totals' });
+  const g = new Grafana({ url: mock.url, token: mock.token });
+  await assert.rejects(fetchNetflowRows(g, win), /totals: Code: 60/);
+  await mock.close();
+});
+
+test('netflow live: a failing raw-table (Top-10) query degrades explicitly: the report is built, the table says why', async () => {
   const mock = await startGrafanaMock({ netflowRows: netflowFixture(win), failQuery: 'top_src' });
   const g = new Grafana({ url: mock.url, token: mock.token });
-  await assert.rejects(fetchNetflowRows(g, win), /top_src: Code: 60/);
+  const rows = await fetchNetflowRows(g, win);
+  assert.deepEqual(Object.keys(rows._failed), ['top_src']);
+  assert.match(rows._failed.top_src, /Code: 60/);
+  const m = buildNetflowModel({ win, rows, nowMs: now, demo: false });
+  assert.equal(m.status, 'COMPLETE');
+  assert.deepEqual(m.tables.top_src, []);
+  assert.equal(m.tables.top_dst.length, 10, 'the other tables are unaffected');
+  assert.ok(m.observations.some((o) => /1 of the Top-10 tables are not available/.test(o)));
+  const html = buildNetflowHtml(m, {}).html;
+  assert.match(html, /Not available: the query on the raw flow table failed/);
+  await mock.close();
+});
+
+test('netflow live: a transient Grafana error on an optional query still aborts (so the caller retries), it is not mistaken for a query failure', async () => {
+  const mock = await startGrafanaMock({ netflowRows: netflowFixture(win) });
+  const g = new Grafana({ url: mock.url, token: mock.token });
+  const first = await fetchNetflowRows(g, win);
+  assert.deepEqual(first._failed, {});
+  mock.state.fail503 = 1;                       // the very next request fails with 503
+  await assert.rejects(fetchNetflowRows(g, win), (e) => e.status === 503 && e.transient === true);
   await mock.close();
 });
 
