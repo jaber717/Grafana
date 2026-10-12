@@ -66,6 +66,7 @@ export async function htmlToPdf(html, outPath, { chromium, expectedPages, timeou
 }
 
 export function findLocalChromium() {
+  if (process.env.CHROMIUM_CMD) return process.env.CHROMIUM_CMD;            // same syntax as report.env (e.g. a rootless Podman command)
   const c = [process.env.CHROMIUM_BIN, 'C:/Program Files/Google/Chrome/Application/chrome.exe', 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', '/usr/bin/chromium', '/usr/bin/chromium-browser', '/usr/bin/google-chrome'];
   return c.find((p) => p && existsSync(p)) || null;
 }
