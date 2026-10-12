@@ -64,8 +64,9 @@ export class Grafana {
   }
 
   // Panel image rendered by Grafana's image renderer. width/height in px; scale = device pixel ratio for crisp print output.
-  async renderPanel({ uid, panelId, fromMs, toMs, width, height, tz = 'Asia/Riyadh', theme = 'light', scale = 2, timeoutS = 90 }) {
+  async renderPanel({ uid, panelId, fromMs, toMs, width, height, tz = 'Asia/Riyadh', theme = 'light', scale = 2, timeoutS = 90, vars = {} }) {
     const q = new URLSearchParams({ orgId: String(this.orgId), panelId: String(panelId), from: String(fromMs), to: String(toMs), width: String(width), height: String(height), tz, theme, scale: String(scale), timeout: String(timeoutS), hideLogo: 'true' });
+    for (const [k, v] of Object.entries(vars)) q.set(`var-${k}`, String(v));   // dashboard variables (the report scope)
     const res = await this.#fetch('GET', `/render/d-solo/${uid}/_?${q}`, undefined, 'image/png');
     const buf = Buffer.from(await res.arrayBuffer());
     if (!res.ok) throw new GrafanaError(`render panel ${panelId}: HTTP ${res.status} ${buf.toString('utf8', 0, 200)}`, { status: res.status, transient: res.status >= 500 });

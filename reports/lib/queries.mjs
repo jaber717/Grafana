@@ -5,11 +5,13 @@
 //  - the Akvorado demo exporter (::ffff:247.16.14.11) is always excluded from real reports;
 //  - the window is half-open [FROM, TO): the 5-minute rollup gives 288 buckets for a day, the hourly one 24.
 // Placeholders: {FROM} / {TO} are replaced by $__fromTime / $__toTime in dashboards and by explicit DateTime values by the client.
+// {EXP} is the exporter scope of a saved report scope: `1` for all exporters; in dashboards a filter on the hidden textbox variable exp_scope
+// (comma separated ExporterName list, empty = all) so one dashboard serves every scope; the client substitutes the literal list.
 
 export const DEMO_EXPORTER = "toIPv6('::ffff:247.16.14.11')";
 export const REAL = `ExporterAddress != ${DEMO_EXPORTER}`;
 export const DIR = "multiIf(InIfBoundary = 'external' AND OutIfBoundary != 'external', 'inbound', OutIfBoundary = 'external' AND InIfBoundary != 'external', 'outbound', InIfBoundary = 'external' AND OutIfBoundary = 'external', 'transit', 'unclassified')";
-const win = (extra = '') => `TimeReceived >= {FROM} AND TimeReceived < {TO} AND ${REAL}${extra ? ` AND ${extra}` : ''}`;
+const win = (extra = '') => `TimeReceived >= {FROM} AND TimeReceived < {TO} AND ${REAL} AND {EXP}${extra ? ` AND ${extra}` : ''}`;
 const edge = `${DIR} IN ('inbound', 'outbound')`;
 const IP = (c) => `replaceRegexpOne(IPv6NumToString(${c}), '^::ffff:', '')`;
 const SERVICE = `concat(multiIf(Proto = 6, 'TCP', Proto = 17, 'UDP', Proto = 1, 'ICMP', concat('proto ', toString(Proto))), '/', toString(DstPort))`;
@@ -28,7 +30,7 @@ export const NETFLOW_QUERIES = {
   trend_prev: {
     title: 'Previous day (shifted by 24 h)',
     // the previous day, plotted on today's time axis
-    sql: `SELECT toStartOfInterval(TimeReceived, INTERVAL 5 MINUTE) + INTERVAL 1 DAY AS time, sumIf(Bytes * SamplingRate, ${DIR} IN ('inbound', 'outbound')) * 8 / 300 AS \`Previous day\` FROM default.flows_5m0s WHERE TimeReceived >= {FROM} - INTERVAL 1 DAY AND TimeReceived < {TO} - INTERVAL 1 DAY AND ${REAL} GROUP BY time ORDER BY time`,
+    sql: `SELECT toStartOfInterval(TimeReceived, INTERVAL 5 MINUTE) + INTERVAL 1 DAY AS time, sumIf(Bytes * SamplingRate, ${DIR} IN ('inbound', 'outbound')) * 8 / 300 AS \`Previous day\` FROM default.flows_5m0s WHERE TimeReceived >= {FROM} - INTERVAL 1 DAY AND TimeReceived < {TO} - INTERVAL 1 DAY AND ${REAL} AND {EXP} GROUP BY time ORDER BY time`,
   },
   hourly: {
     title: 'Hourly volume',
@@ -73,17 +75,21 @@ export const NETFLOW_QUERIES = {
   },
   totals_prev: {
     title: 'Previous-window totals',
-    sql: `SELECT sumIf(Bytes * SamplingRate, ${DIR} = 'inbound') AS InboundBytes, sumIf(Bytes * SamplingRate, ${DIR} = 'outbound') AS OutboundBytes, uniqExact(TimeReceived) AS Buckets FROM default.flows_5m0s WHERE TimeReceived >= {FROM} - INTERVAL 1 DAY AND TimeReceived < {TO} - INTERVAL 1 DAY AND ${REAL}`,
+    sql: `SELECT sumIf(Bytes * SamplingRate, ${DIR} = 'inbound') AS InboundBytes, sumIf(Bytes * SamplingRate, ${DIR} = 'outbound') AS OutboundBytes, uniqExact(TimeReceived) AS Buckets FROM default.flows_5m0s WHERE TimeReceived >= {FROM} - INTERVAL 1 DAY AND TimeReceived < {TO} - INTERVAL 1 DAY AND ${REAL} AND {EXP}`,
   },
   newest_flow: {
     title: 'Collection freshness',
-    sql: `SELECT toUnixTimestamp(max(TimeReceived)) AS LastFlow FROM default.flows_5m0s WHERE ${REAL}`,
+    sql: `SELECT toUnixTimestamp(max(TimeReceived)) AS LastFlow FROM default.flows_5m0s WHERE ${REAL} AND {EXP}`,
   },
 };
 
-// Substitute the window placeholders. unix seconds -> DateTime literal; dashboards pass {macro: true}.
-export function bind(sql, win_, { macro = false } = {}) {
+// Substitute the window placeholders. unix seconds -> DateTime literal; dashboards pass {macro: true}. exporters: null = no exporter filter, else the
+// ExporterName list of the report scope (names were validated by scope.mjs: no quotes, commas or backslashes).
+export const EXP_MACRO = "('${exp_scope}' = '' OR has(splitByChar(',', '${exp_scope}'), ExporterName))";
+// variable: dashboard panels filter on the exp_scope dashboard variable instead of a literal list.
+export function bind(sql, win_, { macro = false, exporters = null, variable = false } = {}) {
   const from = macro ? '$__fromTime' : `toDateTime(${Math.floor(win_.startMs / 1000)})`;
   const to = macro ? '$__toTime' : `toDateTime(${Math.floor(win_.endMs / 1000)})`;
-  return sql.replaceAll('{FROM}', from).replaceAll('{TO}', to);
+  const exp = variable ? EXP_MACRO : exporters == null ? '1' : exporters.length ? `ExporterName IN (${exporters.map((e) => `'${e}'`).join(', ')})` : '0';
+  return sql.replaceAll('{FROM}', from).replaceAll('{TO}', to).replaceAll('{EXP}', exp);
 }

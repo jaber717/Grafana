@@ -48,6 +48,7 @@ ${kpi({ cls: m.status === 'COMPLETE' ? 'ok' : 'warn', label: 'Data coverage', va
 <div class="sec"><h3>Collection &amp; completeness</h3><table class="t"><tbody>
 <tr><td>Status</td><td class="r"><span class="st ${m.status}">${m.status === 'COMPLETE' ? 'COMPLETE' : 'PARTIAL'}</span></td></tr>
 <tr><td>Intervals with data</td><td class="r">${m.coverage.observed} / ${m.coverage.expected}</td></tr>
+${m.scope && m.scope.id !== 'all' ? `<tr><td>Scope</td><td class="r" title="${esc(m.scope.text)}">${esc(m.scope.title)}</td></tr>` : ''}
 <tr><td>Exporters reporting</td><td class="r">${m.tables.exporters.length}</td></tr>
 <tr><td>Newest flow record</td><td class="r">${esc(fresh)}</td></tr>
 <tr><td>Volume basis</td><td class="r">${k.sampled ? 'Estimated (sampled)' : 'Observed'}</td></tr></tbody></table></div></div>`;

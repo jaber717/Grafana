@@ -8,6 +8,17 @@ const STATUS_COLOR = { COMPLETE: '#2E8B57', PARTIAL: '#B7791F', NO_DATA: '#5F6B7
 
 // [{label, value}] headline figures per report
 export function headline(model) {
+  if (model.kind === 'health') {
+    const k = model.kpis;
+    if (model.status === 'NO_DATA' || !k) return [];
+    const bad = [k.down && `${k.down} DOWN`, k.unknown && `${k.unknown} UNKNOWN`, k.noData && `${k.noData} NO DATA`, k.notMonitored && `${k.notMonitored} NOT MONITORED`].filter(Boolean);
+    return [
+      { label: 'Devices UP at end of day', value: `${k.up} of ${k.devices}${bad.length ? `  ·  ${bad.join(', ')}` : ''}` },
+      { label: 'Average availability', value: k.avgAvailability == null ? 'N/A' : `${fmtPct(k.avgAvailability, 2)}  ·  ${k.withOutage} device${k.withOutage === 1 ? '' : 's'} with down time` },
+      { label: 'Highest CPU peak', value: k.peakCpu ? `${Math.round(k.peakCpu.value)}% - ${k.peakCpu.host} at ${fmtClock(k.peakCpu.at)}` : 'N/A' },
+      { label: 'Devices requiring attention', value: String(model.attention.length) },
+    ];
+  }
   if (model.status === 'NO_DATA' || !model.kpis) return [];
   if (model.kind === 'netflow') {
     const k = model.kpis;
@@ -31,19 +42,24 @@ export function headline(model) {
 }
 
 // The headline rows already state the first two observations (volumes/peaks, resp. reporting count/busiest interface): do not repeat them.
-const extraObservations = (m) => (m.status === 'NO_DATA' ? m.observations : m.observations.slice(2));
+const extraObservations = (m) => (m.status === 'NO_DATA' ? m.observations : m.observations.slice(m.kind === 'health' ? 1 : 2));
 
-const title = (m) => (m.kind === 'netflow' ? 'Daily NetFlow Traffic Report' : 'Daily Interface Traffic Report');
+export const TITLES = { netflow: 'Daily NetFlow Traffic Report', interface: 'Daily Interface Traffic Report', health: 'Daily Network Health Report' };
+const SHORT = { netflow: 'NetFlow', interface: 'Interfaces', health: 'Health' };
+const title = (m) => TITLES[m.kind];
 
 export function emailSubject({ prefix, date, models, demo }) {
-  const parts = models.map((m) => `${m.kind === 'netflow' ? 'NetFlow' : 'Interfaces'} ${statusText(m.status)}`);
+  const parts = models.map((m) => `${SHORT[m.kind]} ${statusText(m.status)}`);
   return `${demo ? '[DEMO] ' : ''}${prefix} - ${date} - ${parts.join(' / ')}`;
 }
+
+// the saved scope, when it is not the default one (every report of a run uses the same scope)
+const scopeLines = (models) => { const s = models.find((m) => m.scope && m.scope.id !== 'all')?.scope; return s ? [`Scope: ${s.text || s.title}`] : []; };
 
 export function emailText({ date, models, files, demo }) {
   const out = [];
   if (demo) out.push(DEMO_LABEL, '');
-  out.push(`Daily network traffic reports - ${fmtLongDate(date)} (00:00-24:00 Asia/Riyadh)`, '');
+  out.push(`Daily network reports - ${fmtLongDate(date)} (00:00-24:00 Asia/Riyadh)`, ...scopeLines(models), '');
   for (const m of models) {
     out.push(`${title(m)}: ${statusText(m.status)}`);
     for (const h of headline(m)) out.push(`  ${h.label}: ${h.value}`);
@@ -71,8 +87,8 @@ export function emailHtml({ date, models, files, demo, grafanaUrl }) {
 <table role="presentation" width="640" cellspacing="0" cellpadding="0" style="width:640px;max-width:100%;background:#fff;border:1px solid #E1E5EA;border-radius:8px;overflow:hidden">
 <tr><td style="background:#14283D;padding:22px 28px">
   <div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#A9BDD3">NOC · Network traffic</div>
-  <div style="font-size:21px;font-weight:600;color:#fff;margin-top:4px">Daily Network Traffic Reports</div>
-  <div style="font-size:13px;color:#C9D6E5;margin-top:4px">${esc(fmtLongDate(date))} · 00:00 - 24:00 Asia/Riyadh (UTC+03:00)</div></td></tr>
+  <div style="font-size:21px;font-weight:600;color:#fff;margin-top:4px">Daily Network Reports</div>
+  <div style="font-size:13px;color:#C9D6E5;margin-top:4px">${esc(fmtLongDate(date))} · 00:00 - 24:00 Asia/Riyadh (UTC+03:00)</div>${scopeLines(models).map((l) => `<div style="font-size:12px;color:#A9BDD3;margin-top:3px">${esc(l)}</div>`).join('')}</td></tr>
 ${demo ? `<tr><td style="background:#FFF4DC;color:#7A4B00;padding:8px 28px;font-size:12px;font-weight:600">${esc(DEMO_LABEL)} - this is a delivery test, not an operational report</td></tr>` : ''}
 ${models.map(section).join('<tr><td style="padding:0 28px"><hr style="border:0;border-top:1px solid #E1E5EA;margin:14px 0 0 0"></td></tr>')}
 <tr><td style="padding:18px 28px 6px 28px;font-size:12px;color:#5F6B7A">
@@ -85,7 +101,7 @@ ${models.map(section).join('<tr><td style="padding:0 28px"><hr style="border:0;b
 export function telegramSummary({ date, models, demo }) {
   const lines = [];
   if (demo) lines.push(`<b>${tgEsc(DEMO_LABEL)}</b>`);
-  lines.push(`<b>Daily network traffic - ${tgEsc(date)}</b>`, `<i>${tgEsc(fmtLongDate(date))}, 00:00-24:00 Asia/Riyadh</i>`, '');
+  lines.push(`<b>Daily network reports - ${tgEsc(date)}</b>`, `<i>${tgEsc(fmtLongDate(date))}, 00:00-24:00 Asia/Riyadh</i>`, ...scopeLines(models).map((l) => `<i>${tgEsc(l)}</i>`), '');
   for (const m of models) {
     lines.push(`<b>${tgEsc(title(m))}</b> - <b>${tgEsc(statusText(m.status))}</b>`);
     if (m.status === 'NO_DATA') lines.push(tgEsc(m.observations[0]));

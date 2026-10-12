@@ -6,7 +6,7 @@
   "daily",
   "interfaces",
   "zabbix",
-  "rev:1436688e97bd"
+  "rev:0513f8a0a00a"
  ],
  "timezone": "Asia/Riyadh",
  "editable": true,
@@ -21,7 +21,27 @@
   "hidden": false
  },
  "templating": {
-  "list": []
+  "list": [
+   {
+    "type": "textbox",
+    "name": "if_scope",
+    "label": "Interfaces (scope)",
+    "description": "Regular expression of the \"<site> <interface> in|out\" series of the report scope.",
+    "query": ".*",
+    "current": {
+     "text": ".*",
+     "value": ".*"
+    },
+    "options": [
+     {
+      "text": ".*",
+      "value": ".*",
+      "selected": true
+     }
+    ],
+    "hide": 2
+   }
+  ]
  },
  "annotations": {
   "list": []
@@ -561,6 +581,24 @@
        "max"
       ],
       "includeTimeField": false
+     }
+    },
+    {
+     "id": "filterByValue",
+     "options": {
+      "type": "include",
+      "match": "any",
+      "filters": [
+       {
+        "fieldName": "Field",
+        "config": {
+         "id": "regex",
+         "options": {
+          "value": "${if_scope:raw}"
+         }
+        }
+       }
+      ]
      }
     },
     {

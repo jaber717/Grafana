@@ -22,7 +22,7 @@ export function parseEnv(text) {
 const KNOWN = new Set(['GRAFANA_URL', 'GRAFANA_TOKEN_FILE', 'INTERFACES_FILE', 'OUTPUT_DIR', 'STATE_DIR', 'LOG_FILE', 'CHROMIUM_CMD', 'REPORT_KINDS',
   'EMAIL_ENABLED', 'EMAIL_FROM', 'EMAIL_TO', 'EMAIL_SUBJECT_PREFIX', 'SMTP_HOST', 'SMTP_PORT', 'SMTP_SECURITY', 'SMTP_USER', 'SMTP_PASSWORD_FILE', 'SMTP_TLS_CA_FILE',
   'TELEGRAM_ENABLED', 'TELEGRAM_API_BASE', 'TELEGRAM_BOT_TOKEN_FILE', 'TELEGRAM_CHAT_ID',
-  'RETRY_ATTEMPTS', 'RETRY_BASE_SECONDS', 'RETRY_MAX_SECONDS', 'NOTIFY_ON_FAILURE', 'RENDER_TIMEOUT_SECONDS', 'PUBLIC_GRAFANA_URL', 'RETENTION_DAYS']);
+  'SCOPES_FILE', 'REPORT_SCOPE', 'RETRY_ATTEMPTS', 'RETRY_BASE_SECONDS', 'RETRY_MAX_SECONDS', 'NOTIFY_ON_FAILURE', 'RENDER_TIMEOUT_SECONDS', 'PUBLIC_GRAFANA_URL', 'RETENTION_DAYS']);
 
 const bool = (v, d = false) => (v == null || v === '' ? d : /^(1|true|yes|on)$/i.test(v));
 const int = (v, d) => (v == null || v === '' ? d : Number.parseInt(v, 10));
@@ -52,18 +52,21 @@ export function validateSettings(env, { fs = { readFileSync, existsSync, statSyn
     stateDir: env.STATE_DIR || '/var/lib/grafana-report/state',
     logFile: env.LOG_FILE || null,
     chromiumCmd: need('CHROMIUM_CMD'),
-    kinds: (env.REPORT_KINDS || 'netflow,interface').split(',').map((x) => x.trim()).filter(Boolean),
+    scopesFile: env.SCOPES_FILE || null,
+    scope: env.REPORT_SCOPE || null,
+    kinds: (env.REPORT_KINDS || 'netflow,interface,health').split(',').map((x) => x.trim()).filter(Boolean),
     retry: { attempts: int(env.RETRY_ATTEMPTS, 4), baseMs: int(env.RETRY_BASE_SECONDS, 30) * 1000, maxMs: int(env.RETRY_MAX_SECONDS, 600) * 1000 },
     renderTimeoutS: int(env.RENDER_TIMEOUT_SECONDS, 90),
     retentionDays: int(env.RETENTION_DAYS, 45),
     notifyOnFailure: bool(env.NOTIFY_ON_FAILURE, true),
     publicGrafanaUrl: env.PUBLIC_GRAFANA_URL || null,
-    email: { enabled: bool(env.EMAIL_ENABLED), from: env.EMAIL_FROM || '', to: [], subjectPrefix: env.EMAIL_SUBJECT_PREFIX || 'Daily Network Traffic Reports',
+    email: { enabled: bool(env.EMAIL_ENABLED), from: env.EMAIL_FROM || '', to: [], subjectPrefix: env.EMAIL_SUBJECT_PREFIX || 'Daily Network Reports',
       smtp: { host: env.SMTP_HOST || '', port: int(env.SMTP_PORT, 25), security: env.SMTP_SECURITY || 'none', username: env.SMTP_USER || null, password: null, tlsCa: env.SMTP_TLS_CA_FILE || null } },
     telegram: { enabled: bool(env.TELEGRAM_ENABLED), apiBase: env.TELEGRAM_API_BASE || 'https://api.telegram.org', token: null, chatId: env.TELEGRAM_CHAT_ID || '' },
   };
-  for (const k of s.kinds) if (!['netflow', 'interface'].includes(k)) problems.push(`REPORT_KINDS: unknown report '${k}' (netflow, interface)`);
+  for (const k of s.kinds) if (!['netflow', 'interface', 'health'].includes(k)) problems.push(`REPORT_KINDS: unknown report '${k}' (netflow, interface, health)`);
   if (!s.kinds.length) problems.push('REPORT_KINDS is empty');
+  if (s.scopesFile && !fs.existsSync(s.scopesFile)) problems.push(`SCOPES_FILE: ${s.scopesFile} does not exist`);
   if (s.grafana.url && !/^https?:\/\//.test(s.grafana.url)) problems.push('GRAFANA_URL must start with http:// or https://');
   if (s.retry.attempts < 1 || s.retry.attempts > 10) problems.push('RETRY_ATTEMPTS must be 1..10');
   if (s.email.enabled) {

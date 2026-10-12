@@ -10,7 +10,7 @@ import { startSmtpMock } from '../mocks/smtp-mock.mjs';
 import { startTelegramMock } from '../mocks/telegram-mock.mjs';
 import { runDaily } from '../../reports/lib/generate.mjs';
 import { findLocalChromium } from '../../reports/lib/pdf.mjs';
-import { netflowFixture, interfaceFixture, demoInterfaceConfig, DEMO_INTERFACE_YAML } from '../../reports/lib/demo-data.mjs';
+import { netflowFixture, interfaceFixture, demoInterfaceConfig, DEMO_INTERFACE_YAML, healthFixture } from '../../reports/lib/demo-data.mjs';
 import { windowForDate } from '../../reports/lib/window.mjs';
 import { liveRevision } from '../../reports/lib/dashboards.mjs';
 import { sha256 } from '../../reports/lib/delivery.mjs';
@@ -22,19 +22,22 @@ const NOW = Date.UTC(2026, 9, 12, 4, 0);                 // 2026-10-12 07:00 Asi
 const noSleep = async () => {};
 const pdfPages = (buf) => (buf.toString('latin1').match(/\/Type\s*\/Page[^s]/g) || []).length;
 
-async function rig({ scenario = 'normal', grafana = {}, smtp = {}, email = true, telegram = true } = {}) {
+async function rig({ scenario = 'normal', grafana = {}, smtp = {}, email = true, telegram = true, kinds = ['netflow', 'interface'], scopes = null, scope = null } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'rpt-e2e-'));
   const cfg = demoInterfaceConfig();
   writeFileSync(join(dir, 'interfaces.yaml'), DEMO_INTERFACE_YAML);
+  if (scopes) writeFileSync(join(dir, 'scopes.yaml'), scopes);
+  const hfx = healthFixture(win, { scenario });
+  const inventory = hfx.devices.map((d, i) => ({ hostid: String(100 + i), host: d.host, name: d.host, status: '0', hostgroups: [...d.sites.map((x) => ({ name: `Site/${x}` })), ...d.types.map((x) => ({ name: `Type/${x}` }))] }));
   const g = await startGrafanaMock({
-    cfg, netflowRows: netflowFixture(win, { scenario }), ifaceSeries: interfaceFixture(win, cfg, { scenario }).series,
-    dashboards: { 'rpt-netflow-daily': { tags: [`rev:${liveRevision('netflow')}`] }, 'rpt-interface-daily': { tags: [`rev:${liveRevision('interface', cfg)}`] } }, ...grafana,
+    cfg, inventory, health: { series: hfx.series }, netflowRows: netflowFixture(win, { scenario }), ifaceSeries: interfaceFixture(win, cfg, { scenario }).series,
+    dashboards: { 'rpt-netflow-daily': { tags: [`rev:${liveRevision('netflow')}`] }, 'rpt-interface-daily': { tags: [`rev:${liveRevision('interface', cfg)}`] }, 'rpt-health-daily': { tags: [`rev:${liveRevision('health')}`] } }, ...grafana,
   });
   const smtpMock = await startSmtpMock(smtp);
   const tg = await startTelegramMock();
   const settings = {
     grafana: { url: g.url, token: g.token }, interfacesFile: join(dir, 'interfaces.yaml'), outputDir: join(dir, 'out'), stateDir: join(dir, 'state'), chromiumCmd: chromium,
-    kinds: ['netflow', 'interface'], retry: { attempts: 3, baseMs: 1, maxMs: 2 }, renderTimeoutS: 30, notifyOnFailure: true, retentionDays: 45, publicGrafanaUrl: null,
+    kinds, scopesFile: scopes ? join(dir, 'scopes.yaml') : null, scope, retry: { attempts: 3, baseMs: 1, maxMs: 2 }, renderTimeoutS: 30, notifyOnFailure: true, retentionDays: 45, publicGrafanaUrl: null,
     email: { enabled: email, from: 'NOC Reports <noc-reports@example.test>', to: ['a@example.test', 'b@example.test'], subjectPrefix: 'Daily Network Traffic Reports', smtp: { host: '127.0.0.1', port: smtpMock.port, security: 'none', username: null, password: null, tlsCa: null } },
     telegram: { enabled: telegram, apiBase: tg.apiBase, token: tg.token, chatId: '-1001' },
   };
@@ -65,7 +68,7 @@ test('e2e: a complete day produces both PDFs and delivers them by e-mail and Tel
   assert.equal(sha256(att[0].d), sha256(readFileSync(join(dir, att[0].n))), 'attachment is byte-identical to the stored PDF');
   // telegram
   assert.deepEqual(r.tg.calls.map((c) => c.method), ['sendMessage', 'sendDocument', 'sendDocument']);
-  assert.match(r.tg.calls[0].fields.text, /Daily network traffic - 2026-10-11/);
+  assert.match(r.tg.calls[0].fields.text, /Daily network reports - 2026-10-11/);
   // a second run for the same day sends nothing again - and does not even query Grafana or print PDFs
   const queries = r.g.stats.dsQueries, renders = r.g.stats.renders;
   const again = await r.run();
@@ -139,5 +142,40 @@ test('e2e: DEMO mode labels every file DEMO- and the demo watermark is in the PD
   assert.equal(out.exitCode, 0);
   const files = readdirSync(join(r.settings.outputDir, '2026-10-11')).filter((f) => f.endsWith('.pdf'));
   assert.deepEqual(files.sort(), ['DEMO-Daily-Interface-Traffic-2026-10-11.pdf', 'DEMO-Daily-NetFlow-2026-10-11.pdf']);
+  await r.done();
+});
+
+test('e2e: the network health report - three pages, state at end of day, rendered with the scope variable, delivered with the other reports', opts, async () => {
+  const r = await rig({ kinds: ['netflow', 'interface', 'health'] });
+  const out = await r.run();
+  assert.equal(out.exitCode, 0, JSON.stringify(out.error || out.delivery));
+  const dir = join(r.settings.outputDir, '2026-10-11');
+  assert.deepEqual(readdirSync(dir).filter((f) => f.endsWith('.pdf')).sort(), ['Daily-Interface-Traffic-2026-10-11.pdf', 'Daily-NetFlow-2026-10-11.pdf', 'Daily-Network-Health-2026-10-11.pdf']);
+  assert.equal(pdfPages(readFileSync(join(dir, 'Daily-Network-Health-2026-10-11.pdf'))), 3);
+  const model = JSON.parse(readFileSync(join(dir, 'health.model.json'), 'utf8'));
+  assert.deepEqual(model.devices.map((d) => [d.host, d.state]), [['DEMO-BR1-R1', 'DOWN'], ['DEMO-BR2-AP1', 'UNKNOWN'], ['DEMO-BR2-R1', 'NO_DATA'], ['DEMO-BR2-SW1', 'NOT_MONITORED'], ['DEMO-DC-R1', 'UP'], ['DEMO-HQ-R1', 'UP'], ['DEMO-HQ-R2', 'UP'], ['DEMO-HQ-SW1', 'UP']].sort((a, b) => a[0].localeCompare(b[0])));
+  assert.equal(r.smtp.messages.length, 1);
+  const m = r.smtp.messages[0];
+  assert.match(m.raw, /NetFlow COMPLETE \/ Interfaces COMPLETE \/ Health PARTIAL/);
+  assert.match(m.raw, /filename="Daily-Network-Health-2026-10-11.pdf"/);
+  assert.equal(r.tg.calls.filter((c) => c.method === 'sendDocument').length, 3);
+  assert.ok(r.g.stats.inventoryCalls >= 1, 'the Zabbix inventory is read through Grafana');
+  await r.done();
+});
+
+test('e2e: a saved scope narrows all three reports to its devices and says so', opts, async () => {
+  const scopes = ['scopes:', '  - id: hq-routers', '    title: HQ routers', '    site: DEMO-HQ', '    device_group: Router', '    metrics: availability, cpu', ''].join(String.fromCharCode(10));
+  const r = await rig({ kinds: ['netflow', 'interface', 'health'], scopes, scope: 'hq-routers', email: false, telegram: false });
+  const out = await r.run();
+  assert.equal(out.exitCode, 0, JSON.stringify(out.error));
+  const dir = join(r.settings.outputDir, '2026-10-11');
+  const health = JSON.parse(readFileSync(join(dir, 'health.model.json'), 'utf8'));
+  assert.deepEqual(health.devices.map((d) => d.host), ['DEMO-HQ-R1', 'DEMO-HQ-R2'], 'site AND device type');
+  assert.deepEqual(health.scope.metrics, ['availability', 'cpu']);
+  const iface = JSON.parse(readFileSync(join(dir, 'interface.model.json'), 'utf8'));
+  assert.deepEqual(iface.interfaces.map((i) => i.key), ['DEMO-HQ-R1:Gi0/0', 'DEMO-HQ-R1:Gi0/1']);
+  const sql = r.g.stats.queryBodies.flatMap((q) => q.queries.map((x) => x.rawSql || '')).filter((x) => x.includes('flows_5m0s'));
+  assert.ok(sql.length && sql.every((x) => x.includes("ExporterName IN ('DEMO-HQ-R1', 'DEMO-HQ-R2')")), 'every NetFlow query is limited to the scope exporters');
+  assert.equal(r.g.stats.lastRender['var-hosts'], '/^(DEMO-HQ-R1|DEMO-HQ-R2)$/', 'the health panels are rendered for the scope devices only (hosts variable)');
   await r.done();
 });

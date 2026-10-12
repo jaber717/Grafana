@@ -82,6 +82,7 @@ ${kpi({ cls: m.status === 'COMPLETE' ? 'ok' : 'warn', label: 'Data completeness'
   const anomalies = list.reduce((a, s) => a + s.anomalies, 0);
   const coll = `<div class="sec" style="width:88.5mm"><h3>Collection &amp; completeness</h3><table class="t"><tbody>
 <tr><td>Status</td><td class="r">${st(m.status)}</td></tr>
+${m.scope && m.scope.id !== 'all' ? `<tr><td>Scope</td><td class="r" title="${esc(m.scope.text)}">${esc(m.scope.title)}</td></tr>` : ''}
 <tr><td>Interfaces reporting</td><td class="r">${k.interfacesReporting} / ${k.interfacesIncluded}</td></tr>
 <tr><td>Complete (≥ 95%)</td><td class="r">${complete} / ${list.length}</td></tr>
 <tr><td>Excluded by configuration</td><td class="r">${m.excluded.length}</td></tr>

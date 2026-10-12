@@ -5,7 +5,7 @@
   "report",
   "daily",
   "netflow",
-  "rev:f89e72a67689"
+  "rev:96090a8c6f0e"
  ],
  "timezone": "Asia/Riyadh",
  "editable": true,
@@ -20,7 +20,27 @@
   "hidden": false
  },
  "templating": {
-  "list": []
+  "list": [
+   {
+    "type": "textbox",
+    "name": "exp_scope",
+    "label": "Exporters (scope)",
+    "description": "Comma separated exporter names of the report scope; empty = all exporters.",
+    "query": "",
+    "current": {
+     "text": "",
+     "value": ""
+    },
+    "options": [
+     {
+      "text": "",
+      "value": "",
+      "selected": true
+     }
+    ],
+    "hide": 2
+   }
+  ]
  },
  "annotations": {
   "list": []
@@ -117,7 +137,7 @@
      },
      "editorType": "sql",
      "format": 0,
-     "rawSql": "SELECT toStartOfInterval(TimeReceived, INTERVAL 5 MINUTE) AS time, sumIf(Bytes * SamplingRate, multiIf(InIfBoundary = 'external' AND OutIfBoundary != 'external', 'inbound', OutIfBoundary = 'external' AND InIfBoundary != 'external', 'outbound', InIfBoundary = 'external' AND OutIfBoundary = 'external', 'transit', 'unclassified') = 'inbound') * 8 / 300 AS Inbound, sumIf(Bytes * SamplingRate, multiIf(InIfBoundary = 'external' AND OutIfBoundary != 'external', 'inbound', OutIfBoundary = 'external' AND InIfBoundary != 'external', 'outbound', InIfBoundary = 'external' AND OutIfBoundary = 'external', 'transit', 'unclassified') = 'outbound') * 8 / 300 AS Outbound FROM default.flows_5m0s WHERE TimeReceived >= $__fromTime AND TimeReceived < $__toTime AND ExporterAddress != toIPv6('::ffff:247.16.14.11') GROUP BY time ORDER BY time",
+     "rawSql": "SELECT toStartOfInterval(TimeReceived, INTERVAL 5 MINUTE) AS time, sumIf(Bytes * SamplingRate, multiIf(InIfBoundary = 'external' AND OutIfBoundary != 'external', 'inbound', OutIfBoundary = 'external' AND InIfBoundary != 'external', 'outbound', InIfBoundary = 'external' AND OutIfBoundary = 'external', 'transit', 'unclassified') = 'inbound') * 8 / 300 AS Inbound, sumIf(Bytes * SamplingRate, multiIf(InIfBoundary = 'external' AND OutIfBoundary != 'external', 'inbound', OutIfBoundary = 'external' AND InIfBoundary != 'external', 'outbound', InIfBoundary = 'external' AND OutIfBoundary = 'external', 'transit', 'unclassified') = 'outbound') * 8 / 300 AS Outbound FROM default.flows_5m0s WHERE TimeReceived >= $__fromTime AND TimeReceived < $__toTime AND ExporterAddress != toIPv6('::ffff:247.16.14.11') AND ('${exp_scope}' = '' OR has(splitByChar(',', '${exp_scope}'), ExporterName)) GROUP BY time ORDER BY time",
      "refId": "A"
     }
    ]
@@ -234,7 +254,7 @@
      },
      "editorType": "sql",
      "format": 0,
-     "rawSql": "SELECT toStartOfInterval(TimeReceived, INTERVAL 5 MINUTE) AS time, sumIf(Bytes * SamplingRate, multiIf(InIfBoundary = 'external' AND OutIfBoundary != 'external', 'inbound', OutIfBoundary = 'external' AND InIfBoundary != 'external', 'outbound', InIfBoundary = 'external' AND OutIfBoundary = 'external', 'transit', 'unclassified') IN ('inbound', 'outbound')) * 8 / 300 AS `Report day` FROM default.flows_5m0s WHERE TimeReceived >= $__fromTime AND TimeReceived < $__toTime AND ExporterAddress != toIPv6('::ffff:247.16.14.11') GROUP BY time ORDER BY time",
+     "rawSql": "SELECT toStartOfInterval(TimeReceived, INTERVAL 5 MINUTE) AS time, sumIf(Bytes * SamplingRate, multiIf(InIfBoundary = 'external' AND OutIfBoundary != 'external', 'inbound', OutIfBoundary = 'external' AND InIfBoundary != 'external', 'outbound', InIfBoundary = 'external' AND OutIfBoundary = 'external', 'transit', 'unclassified') IN ('inbound', 'outbound')) * 8 / 300 AS `Report day` FROM default.flows_5m0s WHERE TimeReceived >= $__fromTime AND TimeReceived < $__toTime AND ExporterAddress != toIPv6('::ffff:247.16.14.11') AND ('${exp_scope}' = '' OR has(splitByChar(',', '${exp_scope}'), ExporterName)) GROUP BY time ORDER BY time",
      "refId": "A"
     },
     {
@@ -244,7 +264,7 @@
      },
      "editorType": "sql",
      "format": 0,
-     "rawSql": "SELECT toStartOfInterval(TimeReceived, INTERVAL 5 MINUTE) + INTERVAL 1 DAY AS time, sumIf(Bytes * SamplingRate, multiIf(InIfBoundary = 'external' AND OutIfBoundary != 'external', 'inbound', OutIfBoundary = 'external' AND InIfBoundary != 'external', 'outbound', InIfBoundary = 'external' AND OutIfBoundary = 'external', 'transit', 'unclassified') IN ('inbound', 'outbound')) * 8 / 300 AS `Previous day` FROM default.flows_5m0s WHERE TimeReceived >= $__fromTime - INTERVAL 1 DAY AND TimeReceived < $__toTime - INTERVAL 1 DAY AND ExporterAddress != toIPv6('::ffff:247.16.14.11') GROUP BY time ORDER BY time",
+     "rawSql": "SELECT toStartOfInterval(TimeReceived, INTERVAL 5 MINUTE) + INTERVAL 1 DAY AS time, sumIf(Bytes * SamplingRate, multiIf(InIfBoundary = 'external' AND OutIfBoundary != 'external', 'inbound', OutIfBoundary = 'external' AND InIfBoundary != 'external', 'outbound', InIfBoundary = 'external' AND OutIfBoundary = 'external', 'transit', 'unclassified') IN ('inbound', 'outbound')) * 8 / 300 AS `Previous day` FROM default.flows_5m0s WHERE TimeReceived >= $__fromTime - INTERVAL 1 DAY AND TimeReceived < $__toTime - INTERVAL 1 DAY AND ExporterAddress != toIPv6('::ffff:247.16.14.11') AND ('${exp_scope}' = '' OR has(splitByChar(',', '${exp_scope}'), ExporterName)) GROUP BY time ORDER BY time",
      "refId": "B"
     }
    ]
@@ -340,7 +360,7 @@
      },
      "editorType": "sql",
      "format": 0,
-     "rawSql": "SELECT toStartOfInterval(TimeReceived, INTERVAL 1 HOUR) AS time, sumIf(Bytes * SamplingRate, multiIf(InIfBoundary = 'external' AND OutIfBoundary != 'external', 'inbound', OutIfBoundary = 'external' AND InIfBoundary != 'external', 'outbound', InIfBoundary = 'external' AND OutIfBoundary = 'external', 'transit', 'unclassified') = 'inbound') AS Inbound, sumIf(Bytes * SamplingRate, multiIf(InIfBoundary = 'external' AND OutIfBoundary != 'external', 'inbound', OutIfBoundary = 'external' AND InIfBoundary != 'external', 'outbound', InIfBoundary = 'external' AND OutIfBoundary = 'external', 'transit', 'unclassified') = 'outbound') AS Outbound FROM default.flows_1h0m0s WHERE TimeReceived >= $__fromTime AND TimeReceived < $__toTime AND ExporterAddress != toIPv6('::ffff:247.16.14.11') GROUP BY time ORDER BY time",
+     "rawSql": "SELECT toStartOfInterval(TimeReceived, INTERVAL 1 HOUR) AS time, sumIf(Bytes * SamplingRate, multiIf(InIfBoundary = 'external' AND OutIfBoundary != 'external', 'inbound', OutIfBoundary = 'external' AND InIfBoundary != 'external', 'outbound', InIfBoundary = 'external' AND OutIfBoundary = 'external', 'transit', 'unclassified') = 'inbound') AS Inbound, sumIf(Bytes * SamplingRate, multiIf(InIfBoundary = 'external' AND OutIfBoundary != 'external', 'inbound', OutIfBoundary = 'external' AND InIfBoundary != 'external', 'outbound', InIfBoundary = 'external' AND OutIfBoundary = 'external', 'transit', 'unclassified') = 'outbound') AS Outbound FROM default.flows_1h0m0s WHERE TimeReceived >= $__fromTime AND TimeReceived < $__toTime AND ExporterAddress != toIPv6('::ffff:247.16.14.11') AND ('${exp_scope}' = '' OR has(splitByChar(',', '${exp_scope}'), ExporterName)) GROUP BY time ORDER BY time",
      "refId": "A"
     }
    ]
@@ -456,7 +476,7 @@
      },
      "editorType": "sql",
      "format": 0,
-     "rawSql": "SELECT multiIf(Proto = 6, 'TCP', Proto = 17, 'UDP', Proto = 1, 'ICMP', 'Other') AS Protocol, sum(Bytes * SamplingRate) AS Bytes FROM default.flows_1h0m0s WHERE TimeReceived >= $__fromTime AND TimeReceived < $__toTime AND ExporterAddress != toIPv6('::ffff:247.16.14.11') AND multiIf(InIfBoundary = 'external' AND OutIfBoundary != 'external', 'inbound', OutIfBoundary = 'external' AND InIfBoundary != 'external', 'outbound', InIfBoundary = 'external' AND OutIfBoundary = 'external', 'transit', 'unclassified') IN ('inbound', 'outbound') GROUP BY Protocol ORDER BY Bytes DESC",
+     "rawSql": "SELECT multiIf(Proto = 6, 'TCP', Proto = 17, 'UDP', Proto = 1, 'ICMP', 'Other') AS Protocol, sum(Bytes * SamplingRate) AS Bytes FROM default.flows_1h0m0s WHERE TimeReceived >= $__fromTime AND TimeReceived < $__toTime AND ExporterAddress != toIPv6('::ffff:247.16.14.11') AND ('${exp_scope}' = '' OR has(splitByChar(',', '${exp_scope}'), ExporterName)) AND multiIf(InIfBoundary = 'external' AND OutIfBoundary != 'external', 'inbound', OutIfBoundary = 'external' AND InIfBoundary != 'external', 'outbound', InIfBoundary = 'external' AND OutIfBoundary = 'external', 'transit', 'unclassified') IN ('inbound', 'outbound') GROUP BY Protocol ORDER BY Bytes DESC",
      "refId": "A"
     }
    ],
@@ -581,7 +601,7 @@
      },
      "editorType": "sql",
      "format": 0,
-     "rawSql": "SELECT ExporterSite AS Site, sumIf(Bytes * SamplingRate, multiIf(InIfBoundary = 'external' AND OutIfBoundary != 'external', 'inbound', OutIfBoundary = 'external' AND InIfBoundary != 'external', 'outbound', InIfBoundary = 'external' AND OutIfBoundary = 'external', 'transit', 'unclassified') = 'inbound') AS InboundBytes, sumIf(Bytes * SamplingRate, multiIf(InIfBoundary = 'external' AND OutIfBoundary != 'external', 'inbound', OutIfBoundary = 'external' AND InIfBoundary != 'external', 'outbound', InIfBoundary = 'external' AND OutIfBoundary = 'external', 'transit', 'unclassified') = 'outbound') AS OutboundBytes FROM default.flows_1h0m0s WHERE TimeReceived >= $__fromTime AND TimeReceived < $__toTime AND ExporterAddress != toIPv6('::ffff:247.16.14.11') AND ExporterSite != '' GROUP BY Site ORDER BY InboundBytes + OutboundBytes DESC LIMIT 10",
+     "rawSql": "SELECT ExporterSite AS Site, sumIf(Bytes * SamplingRate, multiIf(InIfBoundary = 'external' AND OutIfBoundary != 'external', 'inbound', OutIfBoundary = 'external' AND InIfBoundary != 'external', 'outbound', InIfBoundary = 'external' AND OutIfBoundary = 'external', 'transit', 'unclassified') = 'inbound') AS InboundBytes, sumIf(Bytes * SamplingRate, multiIf(InIfBoundary = 'external' AND OutIfBoundary != 'external', 'inbound', OutIfBoundary = 'external' AND InIfBoundary != 'external', 'outbound', InIfBoundary = 'external' AND OutIfBoundary = 'external', 'transit', 'unclassified') = 'outbound') AS OutboundBytes FROM default.flows_1h0m0s WHERE TimeReceived >= $__fromTime AND TimeReceived < $__toTime AND ExporterAddress != toIPv6('::ffff:247.16.14.11') AND ('${exp_scope}' = '' OR has(splitByChar(',', '${exp_scope}'), ExporterName)) AND ExporterSite != '' GROUP BY Site ORDER BY InboundBytes + OutboundBytes DESC LIMIT 10",
      "refId": "A"
     }
    ]
@@ -705,7 +725,7 @@
      },
      "editorType": "sql",
      "format": 0,
-     "rawSql": "SELECT if(InIfBoundary = 'external', InIfProvider, OutIfProvider) AS Provider, sumIf(Bytes * SamplingRate, multiIf(InIfBoundary = 'external' AND OutIfBoundary != 'external', 'inbound', OutIfBoundary = 'external' AND InIfBoundary != 'external', 'outbound', InIfBoundary = 'external' AND OutIfBoundary = 'external', 'transit', 'unclassified') = 'inbound') AS InboundBytes, sumIf(Bytes * SamplingRate, multiIf(InIfBoundary = 'external' AND OutIfBoundary != 'external', 'inbound', OutIfBoundary = 'external' AND InIfBoundary != 'external', 'outbound', InIfBoundary = 'external' AND OutIfBoundary = 'external', 'transit', 'unclassified') = 'outbound') AS OutboundBytes FROM default.flows_1h0m0s WHERE TimeReceived >= $__fromTime AND TimeReceived < $__toTime AND ExporterAddress != toIPv6('::ffff:247.16.14.11') AND multiIf(InIfBoundary = 'external' AND OutIfBoundary != 'external', 'inbound', OutIfBoundary = 'external' AND InIfBoundary != 'external', 'outbound', InIfBoundary = 'external' AND OutIfBoundary = 'external', 'transit', 'unclassified') IN ('inbound', 'outbound') AND if(InIfBoundary = 'external', InIfProvider, OutIfProvider) != '' GROUP BY Provider ORDER BY InboundBytes + OutboundBytes DESC LIMIT 10",
+     "rawSql": "SELECT if(InIfBoundary = 'external', InIfProvider, OutIfProvider) AS Provider, sumIf(Bytes * SamplingRate, multiIf(InIfBoundary = 'external' AND OutIfBoundary != 'external', 'inbound', OutIfBoundary = 'external' AND InIfBoundary != 'external', 'outbound', InIfBoundary = 'external' AND OutIfBoundary = 'external', 'transit', 'unclassified') = 'inbound') AS InboundBytes, sumIf(Bytes * SamplingRate, multiIf(InIfBoundary = 'external' AND OutIfBoundary != 'external', 'inbound', OutIfBoundary = 'external' AND InIfBoundary != 'external', 'outbound', InIfBoundary = 'external' AND OutIfBoundary = 'external', 'transit', 'unclassified') = 'outbound') AS OutboundBytes FROM default.flows_1h0m0s WHERE TimeReceived >= $__fromTime AND TimeReceived < $__toTime AND ExporterAddress != toIPv6('::ffff:247.16.14.11') AND ('${exp_scope}' = '' OR has(splitByChar(',', '${exp_scope}'), ExporterName)) AND multiIf(InIfBoundary = 'external' AND OutIfBoundary != 'external', 'inbound', OutIfBoundary = 'external' AND InIfBoundary != 'external', 'outbound', InIfBoundary = 'external' AND OutIfBoundary = 'external', 'transit', 'unclassified') IN ('inbound', 'outbound') AND if(InIfBoundary = 'external', InIfProvider, OutIfProvider) != '' GROUP BY Provider ORDER BY InboundBytes + OutboundBytes DESC LIMIT 10",
      "refId": "A"
     }
    ]

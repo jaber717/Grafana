@@ -25,7 +25,7 @@ test('settings: minimal valid configuration, channels OFF by default, secrets re
   assert.equal(r.settings.telegram.enabled, false);
   assert.equal(r.settings.grafana.token, 'secret-value');
   assert.equal(r.settings.grafana.url, 'https://grafana.example.test');
-  assert.deepEqual(r.settings.kinds, ['netflow', 'interface']);
+  assert.deepEqual(r.settings.kinds, ['netflow', 'interface', 'health']);
   assert.equal(r.settings.retry.attempts, 4);
   s.done();
 });

@@ -1,12 +1,14 @@
 #!/usr/bin/env node
-// grafana-report - daily NetFlow and interface traffic reports rendered by Grafana.
+// grafana-report - three daily reports rendered by Grafana: NetFlow traffic, interface traffic and network health.
 //
-//   run               generate both reports for the previous Asia/Riyadh day and deliver them (what the systemd timer runs)
+//   run               generate the reports (REPORT_KINDS: netflow, interface, health) for the previous Asia/Riyadh day and deliver them (what the systemd timer runs)
+//                     --scope ID uses a saved scope from SCOPES_FILE (site / device type / devices / interfaces / metrics) instead of REPORT_SCOPE
 //   generate          generate the PDFs only (manual "Generate Report"); never sends anything (--keep-html also keeps the page HTML for debugging)
 //   deliver           deliver already generated PDFs of a day (e-mail / Telegram), duplicate-protected
 //   test-delivery     send a clearly marked TEST message with sample PDFs to the configured (or --to) recipients
 //   check-config      validate settings, interface list, Chromium, Grafana access and dashboard revisions
-//   build-dashboards  generate the two report dashboards from the interface list; --apply installs them in "NOC / Daily Reports"
+//   build-dashboards  generate the three report dashboards from the interface list; --apply installs them in "NOC / Daily Reports"
+//   scopes            list the saved scopes; --resolve [--scope ID] also shows the devices a scope matches in Zabbix (read-only, via Grafana)
 //   discover          READ-ONLY: propose interface candidates from Zabbix (all include: false) or check an existing mapping (--compare)
 //   load-image        offline import of the pinned renderer image (verifies its ID, tags localhost/grafana-image-renderer:pinned)
 //   schedule          show | set HH:MM | enable | disable the daily timer (systemd drop-in; default 07:00 Asia/Riyadh, disabled until enabled)
@@ -21,17 +23,18 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync, spawn } from 'node:child_process';
 import { loadSettings, validateSettings, parseEnv } from './lib/settings.mjs';
-import { runDaily, makeLogger, DASH_UID, slimModel, deliverResults, smtpOf, tgOf } from './lib/generate.mjs';
+import { runDaily, makeLogger, DASH_UID, slimModel, deliverResults, smtpOf, tgOf, resolveRunScope } from './lib/generate.mjs';
+import { loadScopes, pickScope, scopeLabel, isAllScope } from './lib/scope.mjs';
 import { Grafana } from './lib/grafana-client.mjs';
 import { loadInterfaceConfig } from './lib/config.mjs';
-import { netflowDashboard, interfaceDashboard, liveRevision, FOLDER } from './lib/dashboards.mjs';
+import { netflowDashboard, interfaceDashboard, healthDashboard, liveRevision, FOLDER } from './lib/dashboards.mjs';
 import { previousDayWindow, windowForDate } from './lib/window.mjs';
 import { discoverInterfaces, candidatesYaml, compareConfig, zabbixCaller } from './lib/discover.mjs';
 import { deliver, sha256 } from './lib/delivery.mjs';
 import { emailBatch, telegramBatch, telegramUnits } from './lib/channels.mjs';
 import { parseChromiumCmd } from './lib/pdf.mjs';
 import { previewPages } from './lib/preview.mjs';
-import { demoInterfaceConfig, netflowFixture, interfaceFixture } from './lib/demo-data.mjs';
+import { demoInterfaceConfig, netflowFixture, interfaceFixture, healthFixture } from './lib/demo-data.mjs';
 import { DS_DEMO } from './lib/dashboards.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -48,6 +51,7 @@ const need = () => {
   try { return loadSettings(settingsPath); } catch (e) { fail(e.message); }
 };
 const kinds = flags.kind ? String(flags.kind).split(',') : null;
+const scopeId = flags.scope && flags.scope !== true ? flags.scope : null;
 const date = flags.date && flags.date !== true ? flags.date : null;
 if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) fail('--date must be YYYY-MM-DD');
 
@@ -58,7 +62,7 @@ async function main() {
     case 'run': case 'generate': {
       const { settings, warnings } = need();
       warnings.forEach((w) => console.error(`warning: ${w}`));
-      const r = await runDaily({ settings, date, kinds, force: !!flags.force, noDeliver: cmd === 'generate', keepHtml: !!flags['keep-html'], log: loggerFor(settings) });
+      const r = await runDaily({ settings, date, kinds, scopeId, force: !!flags.force, noDeliver: cmd === 'generate', keepHtml: !!flags['keep-html'], log: loggerFor(settings) });
       if (cmd === 'generate') for (const x of r.results) console.log(`${x.model.status.padEnd(8)} ${x.file.path} (${x.file.pages} pages, ${Math.round(x.file.bytes / 1024)} KB)`);
       return r.exitCode;
     }
@@ -71,7 +75,7 @@ async function main() {
         const mp = join(dir, `${k}.model.json`);
         if (!existsSync(mp)) fail(`no generated ${k} report for ${win.date} in ${dir} (run "grafana-report generate --date ${win.date}" first)`);
         const model = JSON.parse(readFileSync(mp, 'utf8'));
-        const filename = readdirSync(dir).find((f) => f.endsWith('.pdf') && !f.startsWith('DEMO-') && f.toLowerCase().includes(k === 'netflow' ? 'netflow' : 'interface'));
+        const filename = readdirSync(dir).find((f) => f.endsWith('.pdf') && !f.startsWith('DEMO-') && f.toLowerCase().includes(k));
         if (!filename) fail(`PDF for ${k} missing in ${dir}`);
         const data = readFileSync(join(dir, filename));
         results.push({ kind: k, model, file: { filename, path: join(dir, filename), bytes: data.length, sha256: sha256(data) } });
@@ -85,7 +89,7 @@ async function main() {
       const log = loggerFor(settings);
       const id = `test-${new Date().toISOString().replace(/\D/g, '').slice(0, 14)}`;
       const ex = join(ROOT, 'docs', 'reports', 'examples');
-      const samples = ['DEMO-Daily-NetFlow-2026-10-11.pdf', 'DEMO-Daily-Interface-Traffic-2026-10-11.pdf'].map((f) => join(ex, f)).filter((p) => existsSync(p)).map((p) => ({ filename: p.split(/[\\/]/).pop().replace('DEMO-', 'TEST-DEMO-'), data: readFileSync(p) }));
+      const samples = ['DEMO-Daily-NetFlow-2026-10-11.pdf', 'DEMO-Daily-Interface-Traffic-2026-10-11.pdf', 'DEMO-Daily-Network-Health-2026-10-11.pdf'].map((f) => join(ex, f)).filter((p) => existsSync(p)).map((p) => ({ filename: p.split(/[\\/]/).pop().replace('DEMO-', 'TEST-DEMO-'), data: readFileSync(p) }));
       if (!samples.length) fail('sample PDFs not found in docs/reports/examples');
       const wantEmail = flags.email || (!flags.telegram && settings.email.enabled), wantTg = flags.telegram || (!flags.email && settings.telegram.enabled);
       let worst = 0;
@@ -122,6 +126,11 @@ async function main() {
       let cfg = null;
       try { cfg = loadInterfaceConfig(readFileSync(settings.interfacesFile, 'utf8')); line(true, `interfaces: ${cfg.interfaces.length} included, ${cfg.excluded.length} excluded, boundaries: ${cfg.boundaries.join(', ') || 'none'}`); } catch (e) { line(false, `interfaces file: ${e.message}`); }
       try {
+        const sc = loadScopes(settings.scopesFile && existsSync(settings.scopesFile) ? readFileSync(settings.scopesFile, 'utf8') : null);
+        const active = pickScope(sc, scopeId || settings.scope);
+        line(true, `scopes: ${[...sc.scopes.keys()].join(', ')}; active: ${active.id} (${scopeLabel(active)})`);
+      } catch (e) { line(false, `scopes: ${e.message}`); }
+      try {
         const wd = mkdtempSync(join(tmpdir(), 'rpt-chk-'));        // a private subdirectory, exactly like a real run (a container cannot relabel /tmp itself)
         const argvC = parseChromiumCmd(settings.chromiumCmd, wd);
         const r = spawnSync(argvC[0], [...argvC.slice(1), '--version'], { encoding: 'utf8', timeout: 120000 });
@@ -135,6 +144,7 @@ async function main() {
         for (const [kind, uid] of Object.entries(DASH_UID)) {
           try {
             if (kind === 'interface' && !cfg) continue;
+            if (!settings.kinds.includes(kind)) continue;
             const d = await g.json('GET', `/api/dashboards/uid/${uid}`);
             const want = liveRevision(kind, cfg);
             line((d.dashboard.tags || []).includes(`rev:${want}`), `dashboard ${uid}: ${(d.dashboard.tags || []).includes(`rev:${want}`) ? 'current' : 'OUT OF DATE (run build-dashboards --apply)'}`);
@@ -147,7 +157,7 @@ async function main() {
     case 'build-dashboards': {
       const ifFile = flags.interfaces && flags.interfaces !== true ? flags.interfaces : need().settings.interfacesFile;
       const cfg = loadInterfaceConfig(readFileSync(ifFile, 'utf8'));
-      const dashes = [netflowDashboard('live'), interfaceDashboard(cfg, 'live')];
+      const dashes = [netflowDashboard('live'), interfaceDashboard(cfg, 'live'), healthDashboard('live')];
       if (!flags.apply) {
         const out = flags.out && flags.out !== true ? flags.out : 'dashboards-out';
         mkdirSync(out, { recursive: true });
@@ -182,6 +192,20 @@ async function main() {
       }
       const text = candidatesYaml(cands);
       if (flags.out && flags.out !== true) { writeFileSync(flags.out, text); console.log(`wrote ${cands.length} candidate(s) to ${flags.out} - none is included; edit and copy the ones you want into interfaces.yaml`); } else process.stdout.write(text);
+      return 0;
+    }
+    case 'scopes': {
+      const text = (() => { try { return readFileSync(need().settings.scopesFile, 'utf8'); } catch { return null; } })();
+      const sc = loadScopes(text);
+      for (const s of sc.scopes.values()) console.log(`${s.id === sc.defaultId ? '*' : ' '} ${s.id.padEnd(20)} ${scopeLabel(s)}`);
+      if (flags.resolve) {
+        const { settings } = need();
+        const g = new Grafana({ url: settings.grafana.url, token: settings.grafana.token });
+        const r = await resolveRunScope({ g, settings, scopeId: scopeId || settings.scope, kinds: ['health'], log: () => {} });
+        console.log(`
+scope ${r.scope.id}: ${r.devices.length} device(s)${r.devices.length ? ':' : ' - nothing matches'}`);
+        for (const d of r.devices) console.log(`  ${d.host.padEnd(28)} site: ${d.sites.join(', ') || '-'}  type: ${d.types.join(', ') || '-'}`);
+      }
       return 0;
     }
     case 'status': {
@@ -265,12 +289,12 @@ async function main() {
 async function demo() {
   const url = (flags['grafana-url'] && flags['grafana-url'] !== true ? flags['grafana-url'] : 'http://127.0.0.1:3000').replace(/\/$/, '');
   if (!/^https?:\/\/(127\.\d+\.\d+\.\d+|localhost|\[::1\])(:|\/|$)/.test(url) && !flags['allow-remote-demo']) fail('demo only talks to a loopback Grafana (it creates a TestData datasource and overwrites dashboards); pass --allow-remote-demo for a disposable remote one');
-  const user = process.env.GRAFANA_USER, pw = process.env.GRAFANA_PASSWORD;
-  if (!user) fail('set GRAFANA_USER and GRAFANA_PASSWORD (environment) for the disposable Grafana');
+  const user = process.env.GRAFANA_USER, pw = process.env.GRAFANA_PASSWORD, tokenFile = process.env.GRAFANA_TOKEN_FILE;
+  if (!user && !tokenFile) fail('set GRAFANA_USER and GRAFANA_PASSWORD, or GRAFANA_TOKEN_FILE (an Editor token), for the disposable Grafana');
   const out = flags.out && flags.out !== true ? flags.out : join(ROOT, 'docs', 'reports', 'examples');
   const chromium = flags.chromium && flags.chromium !== true ? flags.chromium : process.env.CHROMIUM_BIN || fail('set --chromium or CHROMIUM_BIN');
-  const g = new Grafana({ url, user, password: pw });
-  try { await g.json('POST', '/api/datasources', { name: 'Report DEMO (TestData)', type: DS_DEMO.type, uid: DS_DEMO.uid, access: 'proxy' }); } catch (e) { if (!/409|already/.test(e.message)) throw e; }
+  const g = tokenFile ? new Grafana({ url, tokenFile }) : new Grafana({ url, user, password: pw });
+  try { await g.json('POST', '/api/datasources', { name: 'Report DEMO (TestData)', type: DS_DEMO.type, uid: DS_DEMO.uid, access: 'proxy' }); } catch (e) { if (!/409|already|403/.test(e.message)) throw e; }
   try { await g.json('GET', `/api/folders/${FOLDER.uid}`); } catch (e) { if (e.status !== 404) throw e; await g.json('POST', '/api/folders', FOLDER); }
   const date_ = date || '2026-10-11';
   const win = windowForDate(date_);
@@ -282,8 +306,9 @@ async function demo() {
     const cfg = demoInterfaceConfig();
     const nf = netflowFixture(win, { scenario });
     const ifx = interfaceFixture(win, cfg, { scenario });
-    for (const d of [netflowDashboard({ demo: nf }), interfaceDashboard(cfg, { demo: ifx })]) await g.json('POST', '/api/dashboards/db', { dashboard: d, folderUid: FOLDER.uid, overwrite: true });
-    const settings = { grafana: { url }, interfacesFile: null, outputDir: join(tmpdir(), `grafana-report-demo-${process.pid}`, scenario), stateDir: join(out, '.state'), chromiumCmd: chromium, kinds: ['netflow', 'interface'], retry: { attempts: 2, baseMs: 2000, maxMs: 5000 }, renderTimeoutS: 60, notifyOnFailure: false, retentionDays: 3650, email: { enabled: false }, telegram: { enabled: false } };
+    const hfx = healthFixture(win, { scenario });
+    for (const d of [netflowDashboard({ demo: nf }), interfaceDashboard(cfg, { demo: ifx }), healthDashboard({ demo: hfx }, hfx.devices)]) await g.json('POST', '/api/dashboards/db', { dashboard: d, folderUid: FOLDER.uid, overwrite: true });
+    const settings = { grafana: { url }, interfacesFile: null, outputDir: join(tmpdir(), `grafana-report-demo-${process.pid}`, scenario), stateDir: join(out, '.state'), chromiumCmd: chromium, kinds: ['netflow', 'interface', 'health'], retry: { attempts: 2, baseMs: 2000, maxMs: 5000 }, renderTimeoutS: 60, notifyOnFailure: false, retentionDays: 3650, email: { enabled: false }, telegram: { enabled: false } };
     const r = await runDaily({ settings, now, date: date_, noDeliver: true, demo: { scenario, keepHtml: !!flags.previews }, deps: { grafana: g }, log: loggerFor(settings) });
     if (r.exitCode) { code = r.exitCode; continue; }
     const dest = scenario === 'normal' ? out : join(out, scenario);

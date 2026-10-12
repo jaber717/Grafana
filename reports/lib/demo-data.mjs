@@ -149,3 +149,62 @@ export function interfaceFixture(win, cfg, { scenario = 'normal' } = {}) {
   }
   return { series, prevSeries, byKey };
 }
+
+// ---- Network Health (Report C) DEMO fixture ---------------------------------------------------------------------------------------------
+// Eight fictitious devices covering every state: UP, a short outage, ping-only switch (no CPU / memory: still UP), CPU alert, DOWN at the end of
+// the day, NO DATA (stopped reporting), UNKNOWN (SNMP availability only) and NOT MONITORED.
+export const DEMO_HEALTH_DEVICES = [
+  { host: 'DEMO-HQ-R1', sites: ['DEMO-HQ'], types: ['Router'] },
+  { host: 'DEMO-HQ-R2', sites: ['DEMO-HQ'], types: ['Router'] },
+  { host: 'DEMO-HQ-SW1', sites: ['DEMO-HQ'], types: ['Switch'] },
+  { host: 'DEMO-DC-R1', sites: ['DEMO-DC'], types: ['Router'] },
+  { host: 'DEMO-BR1-R1', sites: ['DEMO-BRANCH-1'], types: ['Router'] },
+  { host: 'DEMO-BR2-R1', sites: ['DEMO-BRANCH-2'], types: ['Router'] },
+  { host: 'DEMO-BR2-AP1', sites: ['DEMO-BRANCH-2'], types: ['Switch'] },
+  { host: 'DEMO-BR2-SW1', sites: ['DEMO-BRANCH-2'], types: ['Switch'] },
+];
+
+// scenario: 'normal' | 'partial' (DEMO-HQ-R1 has a 100 minute gap) | 'nodata'
+export function healthFixture(win, { scenario = 'normal' } = {}) {
+  const devices = DEMO_HEALTH_DEVICES;
+  const seen = new Set(devices.filter((d) => d.host !== 'DEMO-BR2-SW1' || scenario === 'nodata').map((d) => d.host));
+  const out = { devices, series: { ping: {}, snmp: {}, cpu: {}, mem: {} }, fresh: {}, seen, byHost: {} };
+  if (scenario === 'nodata') return out;
+  const at = (k) => win.startMs + k * BUCKET_S * 1000;
+  const plan = {
+    'DEMO-HQ-R1': { cpu: [34, 71, 5], mem: [52, 6, 6], gap: scenario === 'partial' ? [150, 170] : null },
+    'DEMO-HQ-R2': { cpu: [29, 55, 8], mem: [47, 5, 9], down: [38, 46] },
+    'DEMO-HQ-SW1': { ping: true },
+    'DEMO-DC-R1': { cpu: [58, 93, 11], mem: [66, 6, 12] },
+    'DEMO-BR1-R1': { cpu: [24, 49, 14], mem: [41, 4, 15], down: [246, 288], cpuUntilDown: true },
+    'DEMO-BR2-R1': { cpu: [31, 62, 17], mem: [55, 5, 18], stopAt: 252 },
+    'DEMO-BR2-AP1': { snmpOnly: true },
+  };
+  for (const d of devices) {
+    const p = plan[d.host];
+    if (!p) continue;
+    const ping = [], snmp = [], cpu = [], mem = [];
+    const rnd = mulberry32(d.host.length * 131 + 7);
+    const stop = p.stopAt ?? 288;
+    for (let k = 0; k < stop; k++) {
+      if (p.gap && k >= p.gap[0] && k < p.gap[1]) { rnd(); continue; }
+      const isDown = p.down && k >= p.down[0] && k < p.down[1];
+      if (p.snmpOnly) { snmp.push({ t: at(k), v: 0 }); continue; }
+      ping.push({ t: at(k), v: isDown ? 0 : 1 });
+      if (!p.ping) {
+        if (!isDown) {
+          cpu.push({ t: at(k), v: Math.min(99, SHAPE(k, rnd, p.cpu[0] * 0.8 + (k === 132 ? p.cpu[1] - p.cpu[0] : 0))) });
+          mem.push({ t: at(k), v: p.mem[0] + 3 * Math.sin(k / 40 + p.mem[2]) + rnd() });
+        } else rnd(), rnd();
+      }
+    }
+    out.series.ping[d.host] = ping; out.series.snmp[d.host] = snmp; out.series.cpu[d.host] = cpu; out.series.mem[d.host] = mem;
+    const last = (a) => (a.length && a[a.length - 1].t >= win.endMs - 10 * 60e3 ? a[a.length - 1].v : null);
+    out.fresh[d.host] = { ping: last(ping), snmp: p.snmpOnly ? last(snmp) : (last(ping) == null ? null : 1) };
+    if (p.snmpOnly) out.fresh[d.host].ping = null;
+    // peak value pinned to the design number so the demo text is predictable (bucket 132 = 11:00)
+    if (p.cpu && !p.down) { const c = cpu.find((x) => x.t === at(132)); if (c) c.v = p.cpu[1]; }
+    out.byHost[d.host] = { ping: ping.map((x) => x.v), cpu: cpu.map((x) => x.v), mem: mem.map((x) => x.v) };
+  }
+  return out;
+}

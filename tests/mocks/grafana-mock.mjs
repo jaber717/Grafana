@@ -25,6 +25,8 @@ function frameOfRows(rows) {
   return { schema: { fields: names.map((n) => ({ name: n, type: n === 'time' ? 'time' : typeof rows[0][n] === 'number' ? 'number' : 'string' })) }, data: { values: names.map((n) => rows.map((r) => r[n])) } };
 }
 
+// Health (Report C): opts.inventory = host.get rows for POST /api/datasources/uid/zabbix-lab/resources/zabbix-api, opts.health = {series:{ping|snmp|cpu|mem:{host:[{t,v}]}}};
+//   Zabbix targets using the health item filters are answered per host (frames labelled host) for the requested time span.
 // opts: {token, netflowRows:{id:[rows]}, ifaceSeries:{key:{inbound:[{t,bps}],outbound:[...]}}, cfg, fail503:n, tokenRequired:true,
 //        duplicateItems:Set(keys), missingItems:Set(keys), renderSizeOverride:{w,h}}
 export function startGrafanaMock(opts = {}) {
@@ -51,6 +53,16 @@ export function startGrafanaMock(opts = {}) {
             if (opts.failQuery === t.refId) { results[t.refId] = { error: 'Code: 60. DB::Exception: Table default.flows does not exist' }; continue; }
             results[t.refId] = { frames: [frameOfRows(opts.netflowRows?.[t.refId] || [])] };
           } else if (t.datasource?.type === 'alexanderzobnin-zabbix-datasource') {
+            const hk = { '/^ICMP ping$/': 'ping', '/^SNMP agent availability$/': 'snmp', '/CPU utilization/': 'cpu', '/Memory utilization/': 'mem' }[t.item?.filter];
+            if (hk && opts.health) {
+              const from = Number(q.from), to = Number(q.to);
+              const frames = Object.entries(opts.health.series[hk] || {}).filter(([h]) => (t.host?.filter || '').includes(h)).map(([h, ser]) => {
+                const sel = ser.filter((x) => x.t >= from && x.t <= to);
+                return { schema: { name: `${h}: ${hk}`, fields: [{ name: 'time', type: 'time' }, { name: 'value', type: 'number', labels: { host: h, item: hk } }] }, data: { values: [sel.map((x) => x.t), sel.map((x) => x.v)] } };
+              }).filter((fr) => fr.data.values[0].length);
+              results[t.refId] = { frames };
+              continue;
+            }
             const hit = byItem.get(`${t.host?.filter}|${t.item?.filter}`);
             if (!hit || opts.missingItems?.has(hit.key)) { results[t.refId] = { frames: [] }; continue; }
             const ser = opts.ifaceSeries?.[hit.key]?.[hit.dir] || [];
@@ -60,6 +72,12 @@ export function startGrafanaMock(opts = {}) {
         }
         reply(200, { results });
       });
+      return;
+    }
+    if (req.method === 'POST' && /^\/api\/datasources\/uid\/[^/]+\/resources\/zabbix-api$/.test(req.url)) {
+      let body = '';
+      req.on('data', (d) => (body += d));
+      req.on('end', () => { stats.inventoryCalls = (stats.inventoryCalls || 0) + 1; reply(200, { result: opts.inventory || [] }); });
       return;
     }
     if (req.method === 'GET' && req.url.startsWith('/render/d-solo/')) {

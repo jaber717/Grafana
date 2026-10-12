@@ -4,20 +4,26 @@ import { join } from 'node:path';
 import { Grafana, GrafanaError } from './grafana-client.mjs';
 import { previousDayWindow, windowForDate } from './window.mjs';
 import { loadInterfaceConfig } from './config.mjs';
-import { fetchNetflowRows, fetchInterfaceSeries } from './live.mjs';
+import { fetchNetflowRows, fetchInterfaceSeries, fetchHealthSeries } from './live.mjs';
 import { buildNetflowModel } from './netflow-report.mjs';
 import { buildInterfaceModel } from './interface-report.mjs';
+import { buildHealthModel } from './health-report.mjs';
+import { buildHealthHtml, HEALTH_SLOTS, HEALTH_FILE } from './health-html.mjs';
+import { loadScopes, pickScope, isAllScope, needsInventory, resolveDevices, scopeInterfaces, scopeLabel, hostRegex } from './scope.mjs';
+import { fetchInventory } from './inventory.mjs';
 import { buildNetflowHtml, NETFLOW_SLOTS, NETFLOW_FILE, mmToPx } from './netflow-html.mjs';
 import { buildInterfaceHtml, slotFor, UTIL_SLOT, INTERFACE_FILE } from './interface-html.mjs';
 import { interfacePanelId, liveRevision } from './dashboards.mjs';
 import { htmlToPdf as realHtmlToPdf } from './pdf.mjs';
 import { deliver, sha256 } from './delivery.mjs';
 import { emailBatch, telegramBatch, telegramUnits } from './channels.mjs';
-import { emailHtml, emailText, emailSubject, telegramSummary } from './notify.mjs';
-import { netflowFixture, interfaceFixture, demoInterfaceConfig } from './demo-data.mjs';
+import { emailHtml, emailText, emailSubject, telegramSummary, TITLES } from './notify.mjs';
+import { netflowFixture, interfaceFixture, demoInterfaceConfig, healthFixture } from './demo-data.mjs';
 
-export const DASH_UID = { netflow: 'rpt-netflow-daily', interface: 'rpt-interface-daily' };
-const FILENAME = { netflow: NETFLOW_FILE, interface: INTERFACE_FILE };
+export const DASH_UID = { netflow: 'rpt-netflow-daily', interface: 'rpt-interface-daily', health: 'rpt-health-daily' };
+const FILENAME = { netflow: NETFLOW_FILE, interface: INTERFACE_FILE, health: HEALTH_FILE };
+export const REPORT_KINDS = ['netflow', 'interface', 'health'];
+const escRe = (x) => x.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
 
 export function makeLogger(logFile = null, echo = true) {
   return (event) => {
@@ -56,23 +62,43 @@ export async function generateOne(kind, ctx) {
   const { g, win, prevWin, nowMs, settings, outDir, demo = null, log = () => {}, deps = {} } = ctx;
   const htmlToPdf = deps.htmlToPdf || realHtmlToPdf;
   const rt = { ...settings.retry, sleep: deps.sleep, log };
-  const render = (uid, slot, panelId) => retrying(() => g.renderPanel({ uid, panelId, fromMs: win.startMs, toMs: win.endMs - 60000, width: mmToPx(slot.w), height: mmToPx(slot.h), timeoutS: settings.renderTimeoutS }), { ...rt, attempts: 3, baseMs: 5000, what: `render ${kind} panel ${panelId}` });
+  const { scope = ALL, devices = [], cfgFull = null } = ctx.scoped || {};
+  const sText = scopeLabel(scope, devices.length);
+  const render = (uid, slot, panelId, vars = {}) => retrying(() => g.renderPanel({ uid, panelId, fromMs: win.startMs, toMs: win.endMs - 60000, width: mmToPx(slot.w), height: mmToPx(slot.h), timeoutS: settings.renderTimeoutS, vars }), { ...rt, attempts: 3, baseMs: 5000, what: `render ${kind} panel ${panelId}` });
   let model, html, pages;
   const images = {};
   if (kind === 'netflow') {
     if (!demo) await assertDashboardCurrent(g, DASH_UID.netflow, liveRevision('netflow'));
-    const rows = demo ? netflowFixture(win, { scenario: demo.scenario }) : await retrying(() => fetchNetflowRows(g, win), { ...rt, what: 'netflow queries' });
+    const exporters = !demo && !isAllScope(scope) ? devices.map((d) => d.host) : null;
+    const rows = demo ? netflowFixture(win, { scenario: demo.scenario }) : await retrying(() => fetchNetflowRows(g, win, exporters), { ...rt, what: 'netflow queries' });
     model = buildNetflowModel({ win, rows, nowMs, demo: !!demo });
+    model.scope = { id: scope.id, title: scope.title, text: sText };
+    if (exporters) model.notes.push(`Saved scope "${scope.title}": only these exporters are included - ${exporters.length ? exporters.join(', ') : 'none (the scope matches no device)'}.`);
+    const rvars = exporters ? { exp_scope: exporters.join(',') } : {};
     if (model.status !== 'NO_DATA') {
       for (const [name, slot] of Object.entries(NETFLOW_SLOTS)) {
         if ((name === 'site' && !model.available.site) || (name === 'isp' && !model.available.isp) || (name === 'protocols' && !model.available.protocols)) continue;
-        images[name] = await render(DASH_UID.netflow, slot, slot.panelId);
+        images[name] = await render(DASH_UID.netflow, slot, slot.panelId, rvars);
       }
     }
     ({ html, pages } = buildNetflowHtml(model, images));
+  } else if (kind === 'health') {
+    if (!demo) await assertDashboardCurrent(g, DASH_UID.health, liveRevision('health'));
+    const fx = demo ? healthFixture(win, { scenario: demo.scenario }) : { devices, ...(await retrying(() => fetchHealthSeries(g, devices, win), { ...rt, what: 'health queries' })) };
+    model = buildHealthModel({ win, scope, devices: fx.devices, series: fx.series, fresh: fx.fresh, seen: fx.seen, nowMs, demo: !!demo, scopeText: sText });
+    if (model.status !== 'NO_DATA') {
+      const hvars = demo ? {} : { hosts: hostRegex(devices.map((d) => d.host)) };
+      for (const [name, slot] of Object.entries(HEALTH_SLOTS)) {
+        if ((name === 'cpu' && !scope.metrics.includes('cpu')) || (name === 'mem' && !scope.metrics.includes('memory'))) continue;
+        images[name] = await render(DASH_UID.health, slot, slot.panelId, hvars);
+      }
+    }
+    ({ html, pages } = buildHealthHtml(model, images));
   } else {
-    const cfg = demo ? demoInterfaceConfig() : loadInterfaceConfig(readFileSync(settings.interfacesFile, 'utf8'));
-    if (!demo) await assertDashboardCurrent(g, DASH_UID.interface, liveRevision('interface', cfg));
+    const full = demo ? demoInterfaceConfig() : cfgFull || loadInterfaceConfig(readFileSync(settings.interfacesFile, 'utf8'));
+    if (!demo) await assertDashboardCurrent(g, DASH_UID.interface, liveRevision('interface', full));
+    const cfg = demo ? full : scopeInterfaces(scope, full, needsInventory(scope) ? devices : null);
+    const ivars = !demo && cfg.interfaces.length !== full.interfaces.length ? { if_scope: `^(${cfg.interfaces.map((it) => escRe(`${it.site} ${it.interface}`)).join('|') || '$^'}) (in|out)$` } : {};
     let series, issues = {}, prevSeries = {};
     if (demo) { const fx = interfaceFixture(win, cfg, { scenario: demo.scenario }); series = fx.series; prevSeries = fx.prevSeries; }
     else {
@@ -80,11 +106,13 @@ export async function generateOne(kind, ctx) {
       try { ({ series: prevSeries } = await fetchInterfaceSeries(g, cfg, prevWin)); } catch (e) { log({ event: 'previous-day-unavailable', error: e.message.slice(0, 160) }); }
     }
     model = buildInterfaceModel({ win, cfg, series, prevSeries, prevWin, issues, nowMs, demo: !!demo });
+    model.scope = { id: scope.id, title: scope.title, text: sText };
+    if (!isAllScope(scope)) model.notes.push(`Saved scope "${scope.title}": ${cfg.interfaces.length} of ${full.interfaces.length} configured interfaces are included.`);
     if (model.status !== 'NO_DATA') {
-      if (cfg.interfaces.some((i) => i.speedBps)) images.__util = await render(DASH_UID.interface, UTIL_SLOT, UTIL_SLOT.panelId);
-      for (const [i, it] of cfg.interfaces.entries()) {
+      if (cfg.interfaces.some((i) => i.speedBps)) images.__util = await render(DASH_UID.interface, UTIL_SLOT, UTIL_SLOT.panelId, ivars);
+      for (const it of cfg.interfaces) {
         const s = model.interfaces.find((x) => x.key === it.key);
-        if (s.status !== 'NO_DATA') images[it.key] = await render(DASH_UID.interface, slotFor(cfg.interfaces.length), interfacePanelId(i));
+        if (s.status !== 'NO_DATA') images[it.key] = await render(DASH_UID.interface, slotFor(cfg.interfaces.length), interfacePanelId(full.interfaces.findIndex((x) => x.key === it.key)));
       }
     }
     ({ html, pages } = buildInterfaceHtml(model, images));
@@ -133,7 +161,7 @@ export async function deliverResults({ settings, results, win, force = false, de
     out.email = await deliver({ ...base, channel: `${channelPrefix}email`, units: settings.email.to, contentHash, sendBatch: emailBatch(smtpOf(settings), content) });
   }
   if (settings.telegram.enabled) {
-    const content = { summaryHtml: telegramSummary({ date: win.date, models, demo }), documents: files.map((f, i) => ({ filename: f.filename, data: f.data, caption: `<b>${models[i].kind === 'netflow' ? 'NetFlow' : 'Interface traffic'}</b> - ${win.date}` })) };
+    const content = { summaryHtml: telegramSummary({ date: win.date, models, demo }), documents: files.map((f, i) => ({ filename: f.filename, data: f.data, caption: `<b>${TITLES[models[i].kind].replace(/^Daily | Report$/g, '')}</b> - ${win.date}` })) };
     const tg = tgOf(settings);
     out.telegram = await deliver({ ...base, channel: `${channelPrefix}telegram`, units: telegramUnits(content), contentHash, sendBatch: telegramBatch(tg, content) });
   }
@@ -143,14 +171,32 @@ export async function deliverResults({ settings, results, win, force = false, de
 async function notifyFailure({ settings, win, error, log, deps }) {
   if (!settings.notifyOnFailure || !settings.email.enabled) return;
   const subject = `${settings.email.subjectPrefix} - ${win.date} - GENERATION FAILED`;
-  const text = `The daily network traffic reports for ${win.date} could not be generated.\n\nReason: ${error.message}\n\nNo report was produced for this day. Check the grafana-report log on the report host.`;
-  const content = { from: settings.email.from, subject, text, html: `<p style="font-family:Arial,sans-serif;font-size:14px"><b>The daily network traffic reports for ${win.date} could not be generated.</b></p><p style="font-family:Arial,sans-serif;font-size:13px">Reason: ${String(error.message).replace(/[<>&]/g, '')}</p><p style="font-family:Arial,sans-serif;font-size:13px">No report was produced for this day. Check the grafana-report log on the report host.</p>`, attachments: [] };
+  const text = `The daily network reports for ${win.date} could not be generated.\n\nReason: ${error.message}\n\nNo report was produced for this day. Check the grafana-report log on the report host.`;
+  const content = { from: settings.email.from, subject, text, html: `<p style="font-family:Arial,sans-serif;font-size:14px"><b>The daily network reports for ${win.date} could not be generated.</b></p><p style="font-family:Arial,sans-serif;font-size:13px">Reason: ${String(error.message).replace(/[<>&]/g, '')}</p><p style="font-family:Arial,sans-serif;font-size:13px">No report was produced for this day. Check the grafana-report log on the report host.</p>`, attachments: [] };
   await deliver({ ledgerDir: join(settings.stateDir, 'ledger'), channel: 'email-failure', reportDate: win.date, units: settings.email.to, sendBatch: emailBatch(smtpOf(settings), content), retry: settings.retry, log, sleep: deps.sleep });
+}
+
+// ---- saved scope ----------------------------------------------------------------------------------------------------------------------
+// The scope is resolved once per run from the Zabbix inventory (read through Grafana), so devices added to Zabbix join a site / type scope by
+// themselves. The inventory is only fetched when something needs it: the health report always, the others only for a non-default scope.
+const ALL = pickScope(loadScopes(null));
+export async function resolveRunScope({ g, settings, scopeId, kinds, log = () => {}, deps = {} }) {
+  const cfgs = loadScopes(settings.scopesFile && existsSync(settings.scopesFile) ? readFileSync(settings.scopesFile, 'utf8') : null);
+  const scope = pickScope(cfgs, scopeId);
+  const needInv = kinds.includes('health') || !isAllScope(scope);
+  let devices = [];
+  if (needInv) {
+    const inv = await retrying(() => (deps.inventory ? deps.inventory() : fetchInventory(g)), { ...settings.retry, sleep: deps.sleep, log, what: 'inventory' });
+    devices = resolveDevices(scope, inv);
+    log({ event: 'scope-resolved', scope: scope.id, devices: devices.length });
+  }
+  const cfgFull = kinds.includes('interface') ? loadInterfaceConfig(readFileSync(settings.interfacesFile, 'utf8')) : null;
+  return { scope, devices, cfgFull };
 }
 
 // ---- the daily run -----------------------------------------------------------------------------------------------------------------
 // exit codes: 0 ok, 2 generation failed, 3 delivery failed or partial
-export async function runDaily({ settings, now = Date.now(), date = null, kinds = null, force = false, noDeliver = false, demo = null, keepHtml = false, log = () => {}, deps = {} }) {
+export async function runDaily({ settings, now = Date.now(), date = null, kinds = null, scopeId = null, force = false, noDeliver = false, demo = null, keepHtml = false, log = () => {}, deps = {} }) {
   const win = date ? windowForDate(date) : previousDayWindow(now);
   const prevWin = windowForDate(new Date(win.startMs - 86400e3 + 3 * 3600e3).toISOString().slice(0, 10));
   const gr = settings.grafana;
@@ -168,7 +214,8 @@ export async function runDaily({ settings, now = Date.now(), date = null, kinds 
   }
   const results = [];
   try {
-    for (const k of selected) results.push(await generateOne(k, { g, win, prevWin, nowMs: now, settings, outDir: settings.outputDir, demo, keepHtml, log, deps }));
+    const scoped = demo ? { scope: ALL, devices: [] } : await resolveRunScope({ g, settings, scopeId: scopeId || settings.scope, kinds: selected, log, deps });
+    for (const k of selected) results.push(await generateOne(k, { g, win, prevWin, nowMs: now, settings, outDir: settings.outputDir, demo, keepHtml, log, deps, scoped }));
   } catch (e) {
     log({ event: 'generation-failed', error: e.message });
     try { await notifyFailure({ settings, win, error: e, log, deps }); } catch (n) { log({ event: 'failure-notice-failed', error: n.message }); }

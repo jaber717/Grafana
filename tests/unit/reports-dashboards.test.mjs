@@ -1,17 +1,17 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { netflowDashboard, interfaceDashboard, liveRevision, revisionOf, FOLDER, DS_CH, DS_ZBX } from '../../reports/lib/dashboards.mjs';
+import { netflowDashboard, interfaceDashboard, healthDashboard, liveRevision, revisionOf, FOLDER, DS_CH, DS_ZBX } from '../../reports/lib/dashboards.mjs';
 import { loadInterfaceConfig } from '../../reports/lib/config.mjs';
 import { netflowFixture, interfaceFixture, demoInterfaceConfig } from '../../reports/lib/demo-data.mjs';
 import { windowForDate } from '../../reports/lib/window.mjs';
-import { NETFLOW_QUERIES } from '../../reports/lib/queries.mjs';
+import { NETFLOW_QUERIES, bind } from '../../reports/lib/queries.mjs';
 
 const read = (p) => readFileSync(new URL(`../../${p}`, import.meta.url), 'utf8');
 const cfg = loadInterfaceConfig(read('config/reports/interfaces.example.yaml'));
 
 test('reference dashboards in the repository equal what the generator produces (no drift)', () => {
-  for (const [file, want] of [['reports/dashboards/rpt-netflow-daily.json', netflowDashboard('live')], ['reports/dashboards/rpt-interface-daily.json', interfaceDashboard(cfg, 'live')]]) {
+  for (const [file, want] of [['reports/dashboards/rpt-netflow-daily.json', netflowDashboard('live')], ['reports/dashboards/rpt-interface-daily.json', interfaceDashboard(cfg, 'live')], ['reports/dashboards/rpt-health-daily.json', healthDashboard('live')]]) {
     assert.deepEqual(JSON.parse(read(file)), JSON.parse(JSON.stringify(want)), `${file} is out of date: run grafana-report build-dashboards --interfaces config/reports/interfaces.example.yaml --out reports/dashboards`);
   }
 });
@@ -37,7 +37,7 @@ test('live dashboards use the production datasources, name items (never numeric 
 test('every dashboard SQL target is exactly the shared report query (panels and KPIs cannot drift apart)', () => {
   const sqls = new Set(netflowDashboard('live').panels.flatMap((p) => p.targets.map((t) => t.rawSql)));
   for (const id of ['trend', 'trend_total', 'trend_prev', 'hourly', 'protocols', 'by_site', 'by_isp']) {
-    const want = NETFLOW_QUERIES[id].sql.replaceAll('{FROM}', '$__fromTime').replaceAll('{TO}', '$__toTime');
+    const want = bind(NETFLOW_QUERIES[id].sql, null, { macro: true, variable: true });
     assert.ok(sqls.has(want), `panel query for ${id} is the shared definition`);
   }
 });
