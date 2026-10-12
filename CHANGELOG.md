@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased] — feature/daily-reports
+
+Daily NetFlow and Interface traffic reports rendered by Grafana (docs/DAILY-REPORTS.md, docs/reports/VALIDATION.md). **No change to any of the seven operational dashboards, to any UID or datasource definition, or to the v1.0.1 release.**
+
+### Added
+* `bin/grafana-report` (+ `reports/`): `run`, `generate`, `deliver`, `test-delivery`, `check-config`, `build-dashboards`, `discover`, `status`, `schedule`, `load-image`, `demo`. Dependency-free Node.js.
+* Two report dashboards in the folder `NOC / Daily Reports` (generated; reference copies in `reports/dashboards/`), A4-landscape PDF composer with a layout guard, DEMO / PARTIAL / NO DATA designs, example PDFs and previews (`docs/reports/examples/`).
+* E-mail (SMTP with STARTTLS/TLS, HTML + text, multiple recipients) and Telegram delivery with retries, duplicate protection (ledger, lock, already-delivered short-circuit) and failure notices.
+* systemd: `grafana-report.service/.timer` (07:00 Asia/Riyadh, off until enabled), `grafana-image-renderer.service` (digest-pinned image, Podman), `scripts/install-reports.sh`, offline renderer bundle (`tools/build-renderer-bundle.sh`).
+* Optional `[rendering]` block in the platform's `grafana.ini` (`RENDERING_SERVER_URL`, `RENDERING_CALLBACK_URL`, `RENDERING_TOKEN_FILE`; **off by default**, token read from a file).
+* Tests: 106 unit/integration tests (6 end-to-end with real Chromium), RHEL validation scripts (real ClickHouse 174 checks, real Zabbix plugin accuracy 20 checks, resource measurement, systemd hardening bisection).
+
 ## [1.0.1] - 2026-10-11
 
 RHEL 9 production platform. **No change to any dashboard, UID, datasource definition or plugin version** (a unit test proves the LAB environment renders the captured LAB datasources byte-for-byte).

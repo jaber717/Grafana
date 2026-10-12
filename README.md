@@ -23,6 +23,10 @@ sudo bin/grafana-platform install   --env-file /root/grafana.env                
 
 Afterwards: `grafana-platform verify | status | backup | restore | upgrade | rollback | rotate-secrets` (see the guide).
 
+## Daily traffic reports
+
+Two A4-landscape PDFs every morning (NetFlow, Interface traffic) built from **Grafana panels** and delivered by e-mail / Telegram: [docs/DAILY-REPORTS.md](docs/DAILY-REPORTS.md) (install, configuration, operation), [docs/reports/VALIDATION.md](docs/reports/VALIDATION.md) (evidence, sizing, limits, GO/NO-GO), [docs/reports/examples/](docs/reports/examples/README.md) (DEMO, PARTIAL and NO DATA examples).
+
 ## Repository map
 
 | Path | Content |

@@ -6,7 +6,7 @@ Branch `feature/daily-reports` (from release v1.0.1, which is untouched). All va
 
 | Area | Method | Result |
 |---|---|---|
-| Unit and integration tests | `node --test tests/unit/*.test.mjs` (106 tests incl. 6 end-to-end runs with real Chromium) | **106 / 106 pass** (also run on RHEL 9.6 / Node 20.20.2) |
+| Unit and integration tests | `node --test tests/unit/*.test.mjs` (106 tests incl. 6 end-to-end runs with real Chromium) | **106 / 106 pass on Windows/Node 22 and on RHEL 9.6 / Node 20.20.2** (the latter with Chromium from the pinned image under rootless Podman, `tests/rhel/run-unit-suite.sh`, 35 s) |
 | Release gate | `scripts/release-gate.sh` | **PASS, 0 skipped** (syntax, config, secrets scan, inventory, version, units) |
 | Reporting window | unit tests at midnight boundaries; live: `from`/`to` sent to Grafana equal the previous Riyadh day | PASS |
 | **NetFlow SQL accuracy** | all 16 report queries run against a **real ClickHouse 26.8** with the **real Akvorado schema** and 4,616 synthetic rows; each result compared with an *independent* JS aggregation of the same rows (window filter, demo-exporter exclusion, boundary-based direction, × SamplingRate) | **174 / 174 checks** (totals by direction, previous day, 288-point trend, hourly, protocol/IP/conversation/port rankings with exact bytes, exporters, site, ISP; the half-open window excludes the end boundary row) |
@@ -39,11 +39,11 @@ Branch `feature/daily-reports` (from release v1.0.1, which is untouched). All va
 
 ## 3. Measured resource consumption and sizing
 
-Run on a 4 vCPU / 8 GiB VM, three repeated live runs generating **both reports** (2 NetFlow-side + 6 chart renders, 16 SQL queries, 2 × 3-page PDFs):
+Run on a 4 vCPU / 8 GiB VM, three repeated live runs generating **both reports** (9 Grafana panel renders: 6 NetFlow + 3 Interface; 16 SQL queries; two 3-page PDFs):
 
 | Item | Measured |
 |---|---|
-| Wall time, both reports | **43 – 48 s** (≈ 11 s of CPU for the Node process tree) |
+| Wall time, both reports | **43 – 48 s**; the systemd service accounted ≈ 11.6 s of CPU |
 | `grafana-report` (Node) | peak RSS **≈ 92 MB**, ≈ 1 s CPU |
 | Grafana Image Renderer container | peak **≈ 350 MiB**, up to **≈ 250 % CPU** (2.5 cores) during a render; 7 MiB idle |
 | Chromium during PDF printing (rootless Podman) | peak **≈ 1.1 GB** summed RSS (shared pages double-counted: an upper bound) |
@@ -56,7 +56,7 @@ Run on a 4 vCPU / 8 GiB VM, three repeated live runs generating **both reports**
 * **Renderer + report job: a separate host, 2 vCPU / 4 GiB RAM / 20 GB disk** (the renderer service is limited to 2 GiB / 2 CPUs by its unit; the PDF step needs ≈ 1.1 GB on top, sequentially).
 * **Do not install the renderer or Chromium on the existing 2 vCPU / 3 GiB Grafana server.** A render + PDF print would need ≈ 1.5 GB more at peak and 2.5 cores for tens of seconds each morning; the existing Grafana server only needs the `[rendering]` setting (optional block in the platform template, default off) and one restart.
 * A single combined host is acceptable only with ≥ 6 GiB and 4 vCPU.
-* Scaling: each additional interface adds one panel render (≈ 5 s) and one summary row; 14 interfaces were page-tested (unit) and render time grows linearly.
+* Scaling: each additional interface adds one panel render (≈ 5 s) and one summary row; the page count for 14 interfaces is covered by a unit test (layout of > 6 interfaces per page has not been reviewed visually) and render time grows linearly.
 
 ## 4. Known limitations (honest list)
 * **L1 — no real Zabbix, no real LAB traffic.** The interface path was validated through the *real* Zabbix datasource plugin but against a **mock Zabbix server** with synthetic series. Behaviours of a real server are therefore unproven: item-name matching on real hosts (visible name vs technical name — `discover --compare` detects it), history vs trend selection for long ranges, and real counter-reset artefacts. Run `discover --compare` and one manual `generate` against production Zabbix before enabling the timer.
