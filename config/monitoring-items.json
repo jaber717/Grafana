@@ -1,5 +1,5 @@
 {
-  "_comment": "Zabbix item NAMES the Grafana dashboards and the daily reports look for. Edit here (never in a dashboard) to support another vendor, then regenerate: node tools/monitoring/build.mjs && grafana-report build-dashboards --apply. Names are literal text; 'contains' matches a substring, 'exact' the whole name. ORDER = PRECEDENCE: for each device the FIRST name that matches any of its items is used and later names are ignored for that device, so a device with both a vendor item and a generic one never shows two series (vendor-specific names first, generic last). Only items that already hold a PERCENTAGE may be listed: raw counters (e.g. 'Huawei - Memory Raw') are refused. Zabbix does the SNMP polling and preprocessing (walk[...] + regex on the right instance); Grafana only reads the processed numeric item by NAME. A device without a matching item shows N/A, nothing is invented.",
+  "_comment": "Zabbix item NAMES the Grafana dashboards and the daily reports look for. Edit here (never in a dashboard) to support another vendor, then regenerate: node tools/monitoring/build.mjs && grafana-report build-dashboards --apply. Names are literal text; 'contains' matches a substring, 'exact' the whole name. ORDER = PRECEDENCE: for each device the FIRST name that matches any of its items is used and later names are ignored for that device, so a device with both a vendor item and a generic one never shows two series (vendor-specific names first, generic last). Only items that already hold a PERCENTAGE may be listed: raw counters (e.g. 'Huawei - Memory Raw') are refused. Zabbix does the SNMP polling and preprocessing (walk[...] + regex on the right instance); Grafana only reads the processed numeric item by NAME. A device without a matching item shows N/A, nothing is invented. Cisco IOS exposes two memory pools (Processor and I/O) that differ widely: the main (Processor) pool is listed before the generic name so the table and the report both use it; the Metric explorer still lets you draw both.",
   "availability": {
     "icmp": [
       "ICMP ping"
@@ -25,6 +25,7 @@
     "names": [
       "Huawei - Custom Memory",
       "Huawei Memory utilization",
+      "Processor: Memory utilization",
       "Memory utilization"
     ]
   }

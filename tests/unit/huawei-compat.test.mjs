@@ -29,7 +29,7 @@ test('item selection: vendor names first, generic last; one item per device and 
   assert.deepEqual(both.names, ['Huawei: Custom CPU']);
   assert.equal(resolveItem('memory', names('HW-BOTH-03')).pattern, 'Huawei - Custom Memory');
   assert.equal(resolveItem('cpu', names('CISCO-R1')).pattern, 'CPU utilization');
-  assert.equal(resolveItem('memory', names('CISCO-R1')).names.length, 2, 'Cisco keeps its two memory pools (processor / I/O) inside one tier');
+  assert.deepEqual(resolveItem('memory', names('CISCO-R1')).names, ['Processor: Memory utilization'], 'Cisco: the main (Processor) pool is the one used, deterministically - never an arbitrary pick between the two pools');
   assert.equal(resolveItem('memory', names('FORTI-FW')).pattern, 'Memory utilization');
   assert.equal(resolveItem('cpu', names('NO-METRICS-SW')), null);
   assert.equal(resolveItem('memory', names('NO-METRICS-SW')), null, 'a raw counter is never a utilisation');

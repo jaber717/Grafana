@@ -128,13 +128,14 @@ const activeExp = (grid) => stat('ACTIVE EXPORTERS', grid,
 const flowAge = (grid, title = 'LAST REAL FLOW') => stat(title, grid,
   `SELECT if(count() = 0, NULL, dateDiff('second', max(TimeReceived), now())) AS age FROM default.flows WHERE TimeReceived > now() - INTERVAL 24 HOUR AND ${SC}`, 's', {
   description: 'Time since the newest flow record in the selected data scope (raw table, last 24 h). "No flows in 24 h" = nothing was received; it does not say a device is down.',
-  decimals: 0, steps: [{ color: 'green', value: null }, { color: '#5B7A99', value: 300 }], noValue: 'No flows in 24 h' });
+  decimals: 0, steps: [{ color: 'green', value: null }, { color: '#5B7A99', value: 300 }], noValue: 'No flows in 24 h',
+  mappings: [{ type: 'special', options: { match: 'null+nan', result: { text: 'No flows in 24 h', color: '#8A94A3', index: 0 } } }] });
 
 // exporter summary: configured inventory + observed exporters, never "DOWN" from traffic alone
 const exporterSummary = (grid, o = {}) => table(o.title || 'Exporters', grid,
   `SELECT Exporter, Status, Inventory, Traffic, \`Flows/s\`, \`Last flow\` FROM (${EXSTATE})
    ORDER BY multiIf(Status = 'ACTIVE', 0, Status = 'IDLE / NO RECENT FLOWS', 1, 2), Exporter`,
-  [statusCol(), inventoryCol(), unit('Traffic', 'bps', 1), unit('Flows/s', 'none', 2), unit('Last flow', 's', 0), width('Exporter', 110)],
+  [statusCol(), inventoryCol(), unit('Traffic', 'bps', 1), unit('Flows/s', 'none', 2), unit('Last flow', 's', 0), width('Exporter', 200)],
   { description: 'Rows = devices configured in Zabbix for the selected scope plus any exporter seen in flows. ACTIVE: flows in the last 5 min. IDLE / NO RECENT FLOWS: seen in the last 7 days but quiet. NO DATA: configured but no flow seen in 7 days — this says nothing about the device being up or down (see Device Health). NOT IN INVENTORY: sends flows but is not a Zabbix host. Traffic and flows/s are 5-minute averages.',
     noValue: '—' });
 
@@ -307,7 +308,7 @@ dash('netflow-exporters', 'NetFlow | Exporters & Interfaces', '30s', 'now-6h', [
        ${ifaceRow('in')} UNION ALL ${ifaceRow('out')}) ORDER BY bytes DESC LIMIT 20`,
     [unit('Traffic', 'bps', 1), unit('Flows/s', 'none', 2), unit('Last flow', 's', 0),
       col('Role', [{ id: 'custom.cellOptions', value: { type: 'color-text' } }, { id: 'mappings', value: [{ type: 'value', options: { External: { text: 'External', color: '#5B9BD5', index: 0 }, Internal: { text: 'Internal', color: '#A9B4C2', index: 1 }, Router: { text: 'Router-local', color: '#8F9BAA', index: 2 }, Unclassified: { text: 'Unclassified', color: '#6B7788', index: 3 } } }] }]),
-      width('Exporter', 110), width('Role', 110), width('Direction', 100)],
+      width('Exporter', 200), width('Role', 110), width('Direction', 100)],
     { noValue: 'No recent flows on any interface for the selected scope.',
       description: 'Role comes from verified interface boundary metadata. Router-local = traffic to/from the router itself (no output interface). Inbound/Outbound apply to external interfaces; Ingress/Egress to other interfaces. Utilization % is intentionally not shown: interface speed is not verified.' }),
   exporterSummary(G(0, 3, 24, 7), { title: 'Exporter status' }),

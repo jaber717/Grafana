@@ -6,7 +6,7 @@
   "daily",
   "health",
   "zabbix",
-  "rev:8c689fee1a52"
+  "rev:920e8d8d5209"
  ],
  "timezone": "Asia/Riyadh",
  "editable": true,
@@ -160,6 +160,25 @@
     "name": "memory_hosts_2",
     "label": "memory hosts, name 3",
     "description": "Zabbix host filter of the devices whose CPU / memory comes from the configured name number 3.",
+    "query": "/^$/",
+    "current": {
+     "text": "/^$/",
+     "value": "/^$/"
+    },
+    "options": [
+     {
+      "text": "/^$/",
+      "value": "/^$/",
+      "selected": true
+     }
+    ],
+    "hide": 2
+   },
+   {
+    "type": "textbox",
+    "name": "memory_hosts_3",
+    "label": "memory hosts, name 4",
+    "description": "Zabbix host filter of the devices whose CPU / memory comes from the configured name number 4.",
     "query": "/^$/",
     "current": {
      "text": "/^$/",
@@ -1145,6 +1164,85 @@
      },
      "host": {
       "filter": "${memory_hosts_2:raw}"
+     },
+     "application": {
+      "filter": ""
+     },
+     "itemTag": {
+      "filter": ""
+     },
+     "item": {
+      "filter": "/Processor: Memory utilization/"
+     },
+     "functions": [
+      {
+       "def": {
+        "name": "groupBy",
+        "category": "Transform",
+        "params": [
+         {
+          "name": "interval",
+          "type": "string"
+         },
+         {
+          "name": "function",
+          "options": [
+           "avg",
+           "min",
+           "max",
+           "sum",
+           "count",
+           "median",
+           "first",
+           "last"
+          ],
+          "type": "string"
+         }
+        ],
+        "defaultParams": [
+         "1m",
+         "avg"
+        ]
+       },
+       "params": [
+        "5m",
+        "avg"
+       ],
+       "added": false
+      }
+     ],
+     "options": {
+      "showDisabledItems": false,
+      "skipEmptyValues": false,
+      "disableDataAlignment": false,
+      "useZabbixValueMapping": false
+     },
+     "table": {
+      "skipEmptyValues": false
+     },
+     "trigger": {
+      "filter": ""
+     },
+     "tags": {
+      "filter": ""
+     },
+     "proxy": {
+      "filter": ""
+     }
+    },
+    {
+     "datasource": {
+      "type": "alexanderzobnin-zabbix-datasource",
+      "uid": "zabbix-lab"
+     },
+     "queryType": "0",
+     "refId": "mem3",
+     "resultFormat": "time_series",
+     "group": {
+      "filter": "/.*/"
+     },
+     "host": {
+      "filter": "${memory_hosts_3:raw}"
      },
      "application": {
       "filter": ""

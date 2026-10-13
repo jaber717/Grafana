@@ -741,7 +741,19 @@
         "defaults": {
           "unit": "s",
           "decimals": 0,
-          "mappings": [],
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null+nan",
+                "result": {
+                  "text": "No flows in 24 h",
+                  "color": "#8A94A3",
+                  "index": 0
+                }
+              }
+            }
+          ],
           "color": {
             "mode": "thresholds",
             "fixedColor": "#C7D0DC"
@@ -1089,7 +1101,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 110
+                "value": 200
               }
             ]
           }
